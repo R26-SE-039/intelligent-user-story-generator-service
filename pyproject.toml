@@ -1,0 +1,23 @@
+[project]
+name = "transcription-to-user-stories"
+version = "0.1.0"
+description = "RAG pipeline for converting transcripts into user stories"
+requires-python = ">=3.11"
+dependencies = [
+	"fastapi>=0.115.0",
+	"uvicorn>=0.30.0",
+	"pydantic>=2.8.0",
+	"pydantic-settings>=2.4.0",
+	"chromadb>=0.5.5",
+	"openai>=1.40.0",
+	"supabase>=2.15.3",
+]
+
+[project.optional-dependencies]
+dev = [
+	"pytest>=8.2.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
