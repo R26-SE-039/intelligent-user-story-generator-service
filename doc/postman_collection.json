@@ -1,0 +1,161 @@
+{
+	"info": {
+		"_postman_id": "c1a2b3c4-d5e6-4f7g-8h9i-j0k1l2m3n4o5",
+		"name": "Intelligent User Story Generator (RAG)",
+		"description": "API collection for the RAG-based User Story Generation service.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "General",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"health"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Ingestion & Indexing",
+			"item": [
+				{
+					"name": "Ingest Transcript (Dry Run)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"transcript_id\": \"test-meeting-123\",\n    \"utterances\": [\n        {\n            \"speaker\": \"PO\",\n            \"text\": \"We need a login page with email and password validation.\",\n            \"timestamp\": \"2024-05-02T10:00:00Z\"\n        },\n        {\n            \"speaker\": \"BA\",\n            \"text\": \"Should we also include OAuth providers like Google?\",\n            \"timestamp\": \"2024-05-02T10:00:15Z\"\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/ingest-transcript",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"ingest-transcript"
+							]
+						},
+						"description": "Chunks the transcript without saving to the vector database."
+					},
+					"response": []
+				},
+				{
+					"name": "Index Transcript",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"transcript_id\": \"{{meeting_id}}\",\n    \"utterances\": [\n        {\n            \"speaker\": \"PO\",\n            \"text\": \"The user should be able to reset their password via email link.\",\n            \"timestamp\": \"2024-05-02T10:05:00Z\"\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/index-transcript",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"index-transcript"
+							]
+						},
+						"description": "Processes, embeds, and stores chunks in ChromaDB."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Generation",
+			"item": [
+				{
+					"name": "Generate Stories (RAG)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"meeting_id\": \"{{meeting_id}}\",\n    \"query\": \"Generate user stories for the login and password reset features discussed.\",\n    \"metadata_filter\": {}\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/generate-stories",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"generate-stories"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Run Full Pipeline",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"transcript\": {\n        \"transcript_id\": \"{{meeting_id}}\",\n        \"utterances\": [\n            {\n                \"speaker\": \"PO\",\n                \"text\": \"We need a dashboard that shows user activity logs.\",\n                \"timestamp\": \"2024-05-02T10:10:00Z\"\n            }\n        ]\n    },\n    \"options\": {\n        \"skip_validation\": false,\n        \"generate_clarifications\": true\n    }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/pipeline/run",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pipeline",
+								"run"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8002",
+			"type": "string"
+		},
+		{
+			"key": "meeting_id",
+			"value": "test-meeting-123",
+			"type": "string"
+		}
+	]
+}
