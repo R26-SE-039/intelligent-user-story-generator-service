@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from ..models.schemas import Chunk, Transcript, Utterance
+from src.models.schemas import Chunk, Transcript, Utterance
 
 _FILLER_PATTERN = re.compile(r"\b(um+|uh+|you know|like)\b", flags=re.IGNORECASE)
 _SPACE_PATTERN = re.compile(r"\s+")
@@ -94,3 +94,32 @@ def chunk_transcript(
 		)
 
 	return result
+
+
+def parse_raw_text(text: str, transcript_id: str) -> Transcript:
+	"""Parse raw text into a Transcript object, attempting to detect speakers."""
+	lines = text.splitlines()
+	utterances = []
+
+	for line in lines:
+		line = line.strip()
+		if not line:
+			continue
+
+		# Detect "Speaker: Text" or "Speaker (Role): Text"
+		match = re.match(r"^([^:]+):\s*(.*)$", line)
+		if match:
+			speaker, content = match.groups()
+			utterances.append(Utterance(speaker=speaker.strip(), text=content.strip(), timestamp_start=0.0))
+		else:
+			# Append to last utterance if it's a continuation line
+			if utterances:
+				utterances[-1].text += f" {line}"
+			else:
+				utterances.append(Utterance(speaker="Unknown", text=line, timestamp_start=0.0))
+
+	return Transcript(
+		transcript_id=transcript_id,
+		source="text_upload",
+		utterances=utterances
+	)

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from openai import OpenAI
 
-from ..models.schemas import Chunk, GeneratedStory, StoryBatch
+from src.models.schemas import Chunk, GeneratedStory, StoryBatch
 
 
 class StoryGenerator:
@@ -58,6 +58,9 @@ class StoryGenerator:
 			match = re.search(r"```(?:json)?\s*([\s\S]*?)```", content)
 			content = match.group(1).strip() if match else content
 		data = json.loads(content)
+		# Resilience: If the model returns a list instead of {"stories": []}
+		if isinstance(data, list):
+			data = {"stories": data}
 		return StoryBatch.model_validate(data)
 
 	def _generate_fallback(self, query: str, evidence: list[Chunk]) -> StoryBatch:

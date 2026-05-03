@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..models.schemas import Chunk
+from src.models.schemas import Chunk
 from .chroma_store import ChromaVectorStore
 
 

@@ -8,8 +8,8 @@ from typing import Any
 import chromadb
 from openai import OpenAI
 
-from ..core.config import Settings
-from ..models.schemas import Chunk
+from src.core.config import Settings
+from src.models.schemas import Chunk
 
 
 def _hash_embedding(text: str, dim: int = 256) -> list[float]:

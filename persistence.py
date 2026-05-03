@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from .supabase_gateway import SupabaseGateway
-from .src.models.schemas import Chunk, GeneratedStory, StoryIssue, Transcript
+from supabase_gateway import SupabaseGateway
+from src.models.schemas import Chunk, GeneratedStory, StoryIssue, Transcript
 
 
 class TextPersistence:

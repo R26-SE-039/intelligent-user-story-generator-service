@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import logging
 
-from ...persistence import TextPersistence
-from ...supabase_gateway import SupabaseGateway
-from ..core.config import Settings
-from ..generation.story_generator import StoryGenerator
-from ..ingestion.preprocess import chunk_transcript
-from ..models.schemas import (
+from persistence import TextPersistence
+from supabase_gateway import SupabaseGateway
+from src.core.config import Settings
+from src.generation.story_generator import StoryGenerator
+from src.ingestion.preprocess import chunk_transcript
+from src.models.schemas import (
 	GenerateStoriesRequest,
 	GenerateStoriesResponse,
 	PipelineRunRequest,
@@ -17,9 +17,9 @@ from ..models.schemas import (
 	StoryIssue,
 	Transcript,
 )
-from ..retrieval.chroma_store import ChromaVectorStore
-from ..retrieval.retriever import Retriever
-from ..validation.story_validator import validate_stories
+from src.retrieval.chroma_store import ChromaVectorStore
+from src.retrieval.retriever import Retriever
+from src.validation.story_validator import validate_stories
 
 LOGGER = logging.getLogger(__name__)
 
@@ -93,8 +93,15 @@ class RAGPipeline:
 		return self._generate_stories(request)
 
 	def run(self, request: PipelineRunRequest) -> PipelineRunResponse:
-		"""Run index + retrieve + generate in a single operation."""
+		"""Run index + retrieve + generate in a single operation with phase tracking."""
+		LOGGER.info("--- Starting Pipeline Run for transcript_id=%s ---", request.transcript.transcript_id)
+		
+		# Phase 1: Indexing
+		LOGGER.info("[Phase 1/4] Chunking and Indexing transcript...")
 		indexed_chunks = self.index_transcript(request.transcript)
+		
+		# Phase 2: Generation
+		LOGGER.info("[Phase 2/4] Retrieving context and generating stories via AI...")
 		generation = self._generate_stories(
 			GenerateStoriesRequest(
 				query=request.query,
@@ -103,6 +110,12 @@ class RAGPipeline:
 			),
 			transcript_id=request.transcript.transcript_id,
 		)
+		
+		LOGGER.info("[Phase 3/4] Stories generated and validated successfully.")
+		
+		# Phase 4: Finalizing
+		LOGGER.info("[Phase 4/4] Pipeline completed for transcript_id=%s", request.transcript.transcript_id)
+		
 		return PipelineRunResponse(
 			transcript_id=request.transcript.transcript_id,
 			indexed_chunks=indexed_chunks,

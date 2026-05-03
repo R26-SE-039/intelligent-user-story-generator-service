@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..models.schemas import StoryBatch, StoryIssue
+from src.models.schemas import StoryBatch, StoryIssue
 
 
 def validate_stories(batch: StoryBatch) -> list[StoryIssue]:

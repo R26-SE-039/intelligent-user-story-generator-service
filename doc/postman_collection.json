@@ -29,10 +29,10 @@
 			]
 		},
 		{
-			"name": "Ingestion & Indexing",
+			"name": "Generation Pipeline",
 			"item": [
 				{
-					"name": "Ingest Transcript (Dry Run)",
+					"name": "Run Full Pipeline (Example: Healthcare)",
 					"request": {
 						"method": "POST",
 						"header": [
@@ -43,92 +43,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"transcript_id\": \"test-meeting-123\",\n    \"utterances\": [\n        {\n            \"speaker\": \"PO\",\n            \"text\": \"We need a login page with email and password validation.\",\n            \"timestamp\": \"2024-05-02T10:00:00Z\"\n        },\n        {\n            \"speaker\": \"BA\",\n            \"text\": \"Should we also include OAuth providers like Google?\",\n            \"timestamp\": \"2024-05-02T10:00:15Z\"\n        }\n    ]\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/ingest-transcript",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"ingest-transcript"
-							]
-						},
-						"description": "Chunks the transcript without saving to the vector database."
-					},
-					"response": []
-				},
-				{
-					"name": "Index Transcript",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"transcript_id\": \"{{meeting_id}}\",\n    \"utterances\": [\n        {\n            \"speaker\": \"PO\",\n            \"text\": \"The user should be able to reset their password via email link.\",\n            \"timestamp\": \"2024-05-02T10:05:00Z\"\n        }\n    ]\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/index-transcript",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"index-transcript"
-							]
-						},
-						"description": "Processes, embeds, and stores chunks in ChromaDB."
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "Generation",
-			"item": [
-				{
-					"name": "Generate Stories (RAG)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"meeting_id\": \"{{meeting_id}}\",\n    \"query\": \"Generate user stories for the login and password reset features discussed.\",\n    \"metadata_filter\": {}\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/generate-stories",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"generate-stories"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Run Full Pipeline",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"transcript\": {\n        \"transcript_id\": \"{{meeting_id}}\",\n        \"utterances\": [\n            {\n                \"speaker\": \"PO\",\n                \"text\": \"We need a dashboard that shows user activity logs.\",\n                \"timestamp\": \"2024-05-02T10:10:00Z\"\n            }\n        ]\n    },\n    \"options\": {\n        \"skip_validation\": false,\n        \"generate_clarifications\": true\n    }\n}"
+							"raw": "{\n    \"transcript\": {\n        \"transcript_id\": \"healthcare-system-001\",\n        \"source\": \"System Requirements Meeting\",\n        \"product_area\": \"Smart Patient Management System\",\n        \"utterances\": [\n            { \"speaker\": \"Ravi (PM)\", \"text\": \"The purpose of today’s meeting is to gather and clarify system requirements for the new patient management system.\", \"timestamp_start\": 0.0 },\n            { \"speaker\": \"Dr. Perera\", \"text\": \"Most of our records are paper-based. It’s difficult to quickly access medical history during emergencies.\", \"timestamp_start\": 15.0 },\n            { \"speaker\": \"Jinad (BA)\", \"text\": \"So, quick access to centralized patient records is a priority. Diagnosis, lab reports, and prescriptions?\", \"timestamp_start\": 30.0 },\n            { \"speaker\": \"Dr. Perera\", \"text\": \"Yes, everything should be accessible in one place. Real-time updates are critical in ICU scenarios.\", \"timestamp_start\": 45.0 },\n            { \"speaker\": \"Nimali (Nurse)\", \"text\": \"We need to update patient vitals, medication records, and receive alerts for scheduled treatments.\", \"timestamp_start\": 60.0 },\n            { \"speaker\": \"Kasun (Architect)\", \"text\": \"We should design a responsive system or a dedicated mobile interface. We’ll implement role-based access control (RBAC).\", \"timestamp_start\": 90.0 },\n            { \"speaker\": \"Dr. Perera\", \"text\": \"Patients should be able to book appointments online with SMS or email reminders.\", \"timestamp_start\": 120.0 }\n        ]\n    },\n    \"query\": \"Generate user stories for patient record access, nursing vitals updates, and the appointment booking system.\",\n    \"top_k\": 10\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/pipeline/run",
@@ -138,6 +53,39 @@
 							"path": [
 								"pipeline",
 								"run"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Upload .txt Transcript",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								},
+								{
+									"key": "query",
+									"value": "Generate user stories for the features discussed in this transcript",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/pipeline/upload",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pipeline",
+								"upload"
 							]
 						}
 					},
