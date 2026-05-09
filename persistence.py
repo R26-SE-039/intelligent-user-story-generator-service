@@ -21,6 +21,7 @@ class TextPersistence:
             self._gateway.settings.transcripts_table,
             {
                 "transcript_id": transcript.transcript_id,
+                "project_id": transcript.project_id,
                 "source": transcript.source,
                 "participants": participants,
                 "metadata": {
@@ -80,6 +81,7 @@ class TextPersistence:
         self,
         *,
         transcript_id: str | None,
+        project_id: str | None = None,
         query: str,
         stories: list[GeneratedStory],
         issues: list[StoryIssue],
@@ -91,6 +93,7 @@ class TextPersistence:
             {
                 "story_run_id": story_run_id,
                 "transcript_id": transcript_id,
+                "project_id": project_id,
                 "query": query,
                 "issues": [item.model_dump() for item in issues],
                 "evidence_chunk_ids": evidence_chunk_ids,

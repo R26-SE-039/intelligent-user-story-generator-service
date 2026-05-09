@@ -44,7 +44,8 @@ def pipeline_run(request: PipelineRunRequest) -> PipelineRunResponse:
 @app.post("/pipeline/upload", response_model=PipelineRunResponse)
 async def pipeline_upload(
     file: UploadFile = File(...),
-    query: str = Form("Generate user stories based on this transcript")
+    query: str = Form("Generate user stories based on this transcript"),
+    project_id: str | None = Form(None)
 ) -> PipelineRunResponse:
     """Upload a raw .txt transcript and run the pipeline."""
     if not file.filename.endswith('.txt'):
@@ -57,6 +58,7 @@ async def pipeline_upload(
         # Parse raw text into structured Transcript
         transcript_id = f"upload-{uuid.uuid4().hex[:8]}"
         transcript = parse_raw_text(text, transcript_id)
+        transcript.project_id = project_id
         
         # Create pipeline request
         request = PipelineRunRequest(

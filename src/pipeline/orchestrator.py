@@ -64,6 +64,7 @@ class RAGPipeline:
 		request: GenerateStoriesRequest,
 		*,
 		transcript_id: str | None = None,
+		project_id: str | None = None,
 	) -> GenerateStoriesResponse:
 		"""Retrieve evidence and generate validated stories."""
 		top_k = request.top_k or self.settings.retrieval_top_k
@@ -82,6 +83,7 @@ class RAGPipeline:
 		if self.persistence is not None:
 			self.persistence.save_story_run(
 				transcript_id=transcript_id,
+				project_id=project_id,
 				query=response.query,
 				stories=response.stories,
 				issues=response.issues,
@@ -109,6 +111,7 @@ class RAGPipeline:
 				filters=request.filters,
 			),
 			transcript_id=request.transcript.transcript_id,
+			project_id=request.transcript.project_id,
 		)
 		
 		LOGGER.info("[Phase 3/4] Stories generated and validated successfully.")

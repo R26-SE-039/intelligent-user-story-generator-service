@@ -20,6 +20,7 @@ class Transcript(BaseModel):
     """Transcript payload to ingest and index."""
 
     transcript_id: str
+    project_id: str | None = None
     source: str | None = None
     participants: list[str] = Field(default_factory=list)
     product_area: str | None = None
