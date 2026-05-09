@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -20,6 +19,7 @@ class SupabaseSettings:
     url: str
     service_role_key: str
     schema: str
+    speech_schema: str
     transcripts_table: str
     utterances_table: str
     chunks_table: str
@@ -33,18 +33,22 @@ class SupabaseSettings:
         return bool(self.url and self.service_role_key)
 
 
+from src.core.config import Settings
+
 def load_supabase_settings() -> SupabaseSettings:
+    s = Settings()
     return SupabaseSettings(
-        url=os.getenv("SUPABASE_URL", "").strip(),
-        service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip(),
-        schema=os.getenv("SUPABASE_SCHEMA", "text_to_user_stories").strip() or "text_to_user_stories",
-        transcripts_table=os.getenv("SUPABASE_TRANSCRIPTS_TABLE", "transcripts").strip(),
-        utterances_table=os.getenv("SUPABASE_UTTERANCES_TABLE", "transcript_utterances").strip(),
-        chunks_table=os.getenv("SUPABASE_CHUNKS_TABLE", "transcript_chunks").strip(),
-        story_runs_table=os.getenv("SUPABASE_STORY_RUNS_TABLE", "story_runs").strip(),
-        stories_table=os.getenv("SUPABASE_STORIES_TABLE", "generated_stories").strip(),
-        speech_sessions_table=os.getenv("SUPABASE_SPEECH_SESSIONS_TABLE", "speech_sessions").strip(),
-        captions_table=os.getenv("SUPABASE_CAPTIONS_TABLE", "speech_captions").strip(),
+        url=s.supabase_url.strip(),
+        service_role_key=s.supabase_key.strip(),
+        schema=s.supabase_schema.strip(),
+        speech_schema=s.supabase_speech_schema.strip(),
+        transcripts_table=s.supabase_transcripts_table.strip(),
+        utterances_table=s.supabase_utterances_table.strip(),
+        chunks_table=s.supabase_chunks_table.strip(),
+        story_runs_table=s.supabase_story_runs_table.strip(),
+        stories_table=s.supabase_stories_table.strip(),
+        speech_sessions_table=s.supabase_speech_sessions_table.strip(),
+        captions_table=s.supabase_captions_table.strip(),
     )
 
 
@@ -70,32 +74,28 @@ class SupabaseGateway:
     def from_env(cls) -> "SupabaseGateway":
         return cls(load_supabase_settings())
 
-    def _qualified_table(self, table: str) -> str:
-        if "." in table:
-            return table
-        return f"{self.settings.schema}.{table}"
-
-    def upsert(self, table: str, rows: dict[str, Any] | list[dict[str, Any]], on_conflict: str | None = None) -> None:
+    def upsert(self, table: str, rows: dict[str, Any] | list[dict[str, Any]], on_conflict: str | None = None, schema: str | None = None) -> None:
         if not self._client:
             return
 
-        qualified_table = self._qualified_table(table)
-        query = self._client.table(qualified_table).upsert(rows)
+        target_schema = schema or self.settings.schema
+        query = self._client.schema(target_schema).table(table).upsert(rows)
         if on_conflict:
-            query = self._client.table(qualified_table).upsert(rows, on_conflict=on_conflict)
+            query = self._client.schema(target_schema).table(table).upsert(rows, on_conflict=on_conflict)
         query.execute()
 
-    def insert(self, table: str, rows: dict[str, Any] | list[dict[str, Any]]) -> None:
+    def insert(self, table: str, rows: dict[str, Any] | list[dict[str, Any]], schema: str | None = None) -> None:
         if not self._client:
             return
 
-        self._client.table(self._qualified_table(table)).insert(rows).execute()
+        target_schema = schema or self.settings.schema
+        self._client.schema(target_schema).table(table).insert(rows).execute()
 
     def update(self, table: str, values: dict[str, Any], *, eq: dict[str, Any]) -> None:
         if not self._client:
             return
 
-        query = self._client.table(self._qualified_table(table)).update(values)
+        query = self._client.schema(self.settings.schema).table(table).update(values)
         for key, value in eq.items():
             query = query.eq(key, value)
         query.execute()

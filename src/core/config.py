@@ -25,6 +25,20 @@ class Settings(BaseSettings):
     chunk_overlap_words: int = Field(default=40, alias="CHUNK_OVERLAP_WORDS")
     retrieval_top_k: int = Field(default=8, alias="RETRIEVAL_TOP_K")
 
+    # Supabase
+    supabase_url: str = Field(default="", alias="SUPABASE_URL")
+    supabase_key: str = Field(default="", alias="SUPABASE_SERVICE_ROLE_KEY")
+    supabase_schema: str = Field(default="nextgen_rag_service", alias="SUPABASE_SCHEMA")
+    supabase_speech_schema: str = Field(default="nextgen_speech_service", alias="SUPABASE_SPEECH_SCHEMA")
+    
+    supabase_transcripts_table: str = Field(default="transcripts", alias="SUPABASE_TRANSCRIPTS_TABLE")
+    supabase_utterances_table: str = Field(default="transcript_utterances", alias="SUPABASE_UTTERANCES_TABLE")
+    supabase_chunks_table: str = Field(default="transcript_chunks", alias="SUPABASE_CHUNKS_TABLE")
+    supabase_story_runs_table: str = Field(default="story_runs", alias="SUPABASE_STORY_RUNS_TABLE")
+    supabase_stories_table: str = Field(default="generated_stories", alias="SUPABASE_STORIES_TABLE")
+    supabase_speech_sessions_table: str = Field(default="speech_sessions", alias="SUPABASE_SPEECH_SESSIONS_TABLE")
+    supabase_captions_table: str = Field(default="speech_captions", alias="SUPABASE_CAPTIONS_TABLE")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

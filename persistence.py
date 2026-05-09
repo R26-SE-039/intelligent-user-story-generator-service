@@ -29,6 +29,7 @@ class TextPersistence:
                 "updated_at": _utc_now(),
             },
             on_conflict="transcript_id",
+            schema=self._gateway.settings.speech_schema
         )
 
         utterance_rows = []
@@ -47,7 +48,12 @@ class TextPersistence:
             )
 
         if utterance_rows:
-            self._gateway.upsert(self._gateway.settings.utterances_table, utterance_rows, on_conflict="utterance_id")
+            self._gateway.upsert(
+                self._gateway.settings.utterances_table, 
+                utterance_rows, 
+                on_conflict="utterance_id",
+                schema=self._gateway.settings.speech_schema
+            )
 
     def save_chunks(self, chunks: list[Chunk]) -> None:
         if not chunks:
