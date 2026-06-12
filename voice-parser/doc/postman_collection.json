@@ -1,0 +1,273 @@
+{
+	"info": {
+		"_postman_id": "84e2a6d7-8461-4c6e-91a1-62220c41dbef",
+		"name": "Intelligent Voice Parser Service",
+		"description": "API collection for the Meeting Orchestration and Voice Parsing microservice.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "General",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"health"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Meetings",
+			"item": [
+				{
+					"name": "Create Meeting",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Sprint Planning\",\n    \"is_recorded\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/meeting/create",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"meeting",
+								"create"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Join Meeting",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"meeting_id\": \"{{meeting_id}}\",\n    \"passcode\": \"{{passcode}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/meeting/join",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"meeting",
+								"join"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Collaboration",
+			"item": [
+				{
+					"name": "Get Chat History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/meeting/{{meeting_id}}/chats",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"meeting",
+								"{{meeting_id}}",
+								"chats"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Live Transcript",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/meeting/{{meeting_id}}/transcript",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"meeting",
+								"{{meeting_id}}",
+								"transcript"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Intelligence",
+			"item": [
+				{
+					"name": "Analyze Meeting (Summary)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"type\": \"summary\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/meeting/{{meeting_id}}/analyze",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"meeting",
+								"{{meeting_id}}",
+								"analyze"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Analyze Meeting (Action Items)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"type\": \"action_items\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/meeting/{{meeting_id}}/analyze",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"meeting",
+								"{{meeting_id}}",
+								"analyze"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8001",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "your_auth_service_jwt_here",
+			"type": "string"
+		},
+		{
+			"key": "meeting_id",
+			"value": "ROOM_ID",
+			"type": "string"
+		},
+		{
+			"key": "passcode",
+			"value": "PASSCODE",
+			"type": "string"
+		}
+	]
+}
