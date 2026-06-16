@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Runtime settings for API, models, and retrieval pipeline."""
+    """Runtime settings for the unified intelligent user story generator service."""
 
     app_env: str = "dev"
 
@@ -38,6 +38,19 @@ class Settings(BaseSettings):
     supabase_stories_table: str = Field(default="generated_stories", alias="SUPABASE_STORIES_TABLE")
     supabase_speech_sessions_table: str = Field(default="speech_sessions", alias="SUPABASE_SPEECH_SESSIONS_TABLE")
     supabase_captions_table: str = Field(default="speech_captions", alias="SUPABASE_CAPTIONS_TABLE")
+    supabase_meetings_table: str = Field(default="meetings", alias="SUPABASE_MEETINGS_TABLE")
+    supabase_chats_table: str = Field(default="meeting_chats", alias="SUPABASE_CHATS_TABLE")
+
+    # Azure Speech Service
+    azure_speech_key: str = Field(default="", alias="AZURE_SPEECH_KEY")
+    azure_speech_region: str = Field(default="southeastasia", alias="AZURE_SPEECH_REGION")
+
+    # Auth
+    auth_secret: str = Field(default="dev-change-me-secret", alias="AUTH_SECRET")
+
+    # Speech transcription tuning
+    transcription_timeout_seconds: int = Field(default=120, alias="TRANSCRIPTION_TIMEOUT_SECONDS")
+    transcription_poll_interval_seconds: float = Field(default=1.2, alias="TRANSCRIPTION_POLL_INTERVAL_SECONDS")
 
     model_config = SettingsConfigDict(
         env_file=".env",

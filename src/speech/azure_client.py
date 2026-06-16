@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import azure.cognitiveservices.speech as speechsdk
 from fastapi import HTTPException
-from core.config import SpeechServiceSettings
+from src.speech.config import SpeechServiceSettings
 
 class AzureSpeechClient:
     """Client for Azure Speech Service operations."""

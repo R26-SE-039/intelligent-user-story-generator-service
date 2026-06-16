@@ -7,3 +7,7 @@ openai>=1.40.0
 supabase>=2.15.3
 pytest>=8.2.0
 python-multipart>=0.0.12
+python-dotenv>=1.0.0
+azure-cognitiveservices-speech>=1.40.0
+PyJWT>=2.8.0
+websockets>=12.0

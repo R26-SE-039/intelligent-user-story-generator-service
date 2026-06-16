@@ -8,9 +8,15 @@ from src.models.schemas import (
 )
 from src.pipeline.orchestrator import RAGPipeline
 from src.ingestion.preprocess import parse_raw_text
+from src.speech.config import load_speech_settings
+from src.speech.routes import build_router as build_speech_router
+from src.speech.azure_client import AzureSpeechClient
+from src.speech.persistence import SpeechPersistence
+from src.speech.session_store import SessionStore
+from supabase_gateway import SupabaseGateway
 import uuid
 
-app = FastAPI(title="Text to User Stories Service", version="1.0.0")
+app = FastAPI(title="Intelligent User Story Generator", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,13 +26,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── RAG Pipeline ────────────────────────────────────────────────
 pipeline = RAGPipeline.from_env()
 
+# ── Speech / Meeting Module ─────────────────────────────────────
+speech_settings = load_speech_settings()
+gateway = SupabaseGateway.from_env()
+session_store = SessionStore()
+azure_speech = AzureSpeechClient(speech_settings)
+speech_persistence = SpeechPersistence(gateway)
+
+app.include_router(
+    build_speech_router(
+        store=session_store,
+        azure_speech=azure_speech,
+        persistence=speech_persistence,
+        settings=speech_settings,
+    ),
+    prefix="/speech",
+)
+
+# ── Health ──────────────────────────────────────────────────────
 @app.get("/health")
 def health() -> dict[str, str]:
     """Simple service health endpoint."""
-    return {"status": "ok", "service": "text-to-user-stories"}
+    return {"status": "ok", "service": "intelligent-user-story-generator"}
 
+# ── Pipeline Endpoints ──────────────────────────────────────────
 @app.post("/pipeline/run", response_model=PipelineRunResponse)
 def pipeline_run(request: PipelineRunRequest) -> PipelineRunResponse:
     """Run full end-to-end pipeline from transcript to validated stories."""

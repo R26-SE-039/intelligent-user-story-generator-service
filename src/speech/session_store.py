@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from threading import Lock
+from typing import Any
 from uuid import uuid4
 
 from fastapi import HTTPException
 
-from models.schemas import CaptionLine
+from src.speech.schemas import CaptionLine
 
 
 class SessionStore:
@@ -16,8 +17,8 @@ class SessionStore:
 
     def __init__(self) -> None:
         self._sessions: dict[str, list[CaptionLine]] = {}
-        self._participants: dict[str, dict[str, str]] = {} # meeting_id -> {conn_id: name}
-        self._connections: dict[str, list[Any]] = {} # meeting_id -> [websocket_objs]
+        self._participants: dict[str, dict[str, str]] = {}  # meeting_id -> {conn_id: name}
+        self._connections: dict[str, list[Any]] = {}  # meeting_id -> [websocket_objs]
         self._lock = Lock()
 
     def create_session(self) -> str:

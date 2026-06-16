@@ -1,12 +1,12 @@
-"""Supabase-backed persistence helpers for the speech-to-text service."""
+"""Supabase-backed persistence helpers for the speech-to-text features."""
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
 
-from models.schemas import CaptionLine
-from persistence.supabase_gateway import SupabaseGateway
+from src.speech.schemas import CaptionLine
+from supabase_gateway import SupabaseGateway
 
 
 class SpeechPersistence:
@@ -26,6 +26,7 @@ class SpeechPersistence:
                 "updated_at": _utc_now(),
             },
             on_conflict="session_id",
+            schema=self._gateway.settings.speech_schema,
         )
 
     def stop_session(self, session_id: str) -> None:
@@ -37,6 +38,7 @@ class SpeechPersistence:
                 "updated_at": _utc_now(),
             },
             eq={"session_id": session_id},
+            schema=self._gateway.settings.speech_schema,
         )
 
     def save_caption(self, session_id: str, caption: CaptionLine) -> None:
@@ -49,6 +51,7 @@ class SpeechPersistence:
                 "text": caption.text,
                 "created_at": caption.created_at,
             },
+            schema=self._gateway.settings.speech_schema,
         )
 
     def save_transcription(self, audio_url: str, payload: dict[str, Any]) -> None:
@@ -74,6 +77,7 @@ class SpeechPersistence:
                 "updated_at": _utc_now(),
             },
             on_conflict="transcript_id",
+            schema=self._gateway.settings.speech_schema,
         )
 
         if not utterances:
@@ -96,13 +100,26 @@ class SpeechPersistence:
                 }
             )
 
-        self._gateway.upsert(self._gateway.settings.utterances_table, rows, on_conflict="utterance_id")
+        self._gateway.upsert(
+            self._gateway.settings.utterances_table,
+            rows,
+            on_conflict="utterance_id",
+            schema=self._gateway.settings.speech_schema,
+        )
 
     def save_meeting(self, meeting_data: dict[str, Any]) -> None:
-        self._gateway.insert(self._gateway.settings.meetings_table, meeting_data)
+        self._gateway.insert(
+            self._gateway.settings.meetings_table,
+            meeting_data,
+            schema=self._gateway.settings.speech_schema,
+        )
 
     def get_meeting(self, meeting_id: str) -> dict[str, Any] | None:
-        results = self._gateway.select(self._gateway.settings.meetings_table, eq={"meeting_id": meeting_id})
+        results = self._gateway.select(
+            self._gateway.settings.meetings_table,
+            eq={"meeting_id": meeting_id},
+            schema=self._gateway.settings.speech_schema,
+        )
         return results[0] if results else None
 
     def save_chat(self, meeting_id: str, sender: str, text: str) -> None:
@@ -113,20 +130,23 @@ class SpeechPersistence:
                 "sender": sender,
                 "text": text,
                 "created_at": _utc_now(),
-            }
+            },
+            schema=self._gateway.settings.speech_schema,
         )
 
     def get_chats(self, meeting_id: str) -> list[dict[str, Any]]:
         return self._gateway.select(
             self._gateway.settings.chats_table,
-            eq={"meeting_id": meeting_id}
+            eq={"meeting_id": meeting_id},
+            schema=self._gateway.settings.speech_schema,
         )
 
     def get_meeting_captions(self, meeting_id: str) -> list[dict[str, Any]]:
         # Currently we use meeting_id as session_id in simple cases
         return self._gateway.select(
             self._gateway.settings.captions_table,
-            eq={"session_id": meeting_id}
+            eq={"session_id": meeting_id},
+            schema=self._gateway.settings.speech_schema,
         )
 
     def finalize_meeting_transcript(self, meeting_id: str) -> dict[str, Any] | None:
@@ -156,7 +176,8 @@ class SpeechPersistence:
                 },
                 "updated_at": _utc_now(),
             },
-            on_conflict="transcript_id"
+            on_conflict="transcript_id",
+            schema=self._gateway.settings.speech_schema,
         )
 
         # 2. Save to utterances table
@@ -168,7 +189,7 @@ class SpeechPersistence:
                 "utterance_index": index,
                 "speaker": cap.get("speaker", "Unknown"),
                 "text": cap.get("text", ""),
-                "timestamp_start": None, # Azure real-time doesn't give precise offsets easily here
+                "timestamp_start": None,  # Azure real-time doesn't give precise offsets easily here
                 "timestamp_end": None,
                 "metadata": {
                     "original_caption_id": cap.get("caption_id")
@@ -177,9 +198,10 @@ class SpeechPersistence:
 
         if utterance_rows:
             self._gateway.upsert(
-                self._gateway.settings.utterances_table, 
-                utterance_rows, 
-                on_conflict="utterance_id"
+                self._gateway.settings.utterances_table,
+                utterance_rows,
+                on_conflict="utterance_id",
+                schema=self._gateway.settings.speech_schema,
             )
 
         return {"transcript_id": transcript_id, "utterance_count": len(utterance_rows)}

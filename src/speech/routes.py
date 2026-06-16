@@ -12,17 +12,17 @@ from fastapi import APIRouter, Depends, HTTPException, Header, WebSocket, WebSoc
 import asyncio
 import json
 
-from clients.azure_speech_client import AzureSpeechClient
+from src.speech.azure_client import AzureSpeechClient
 import azure.cognitiveservices.speech as speechsdk
-from core.config import SpeechServiceSettings
-from models.schemas import (
+from src.speech.config import SpeechServiceSettings
+from src.speech.schemas import (
     MeetingCreateRequest,
     MeetingJoinRequest,
     MeetingResponse,
     CaptionLine
 )
-from persistence.speech_persistence import SpeechPersistence
-from storage.session_store import SessionStore
+from src.speech.persistence import SpeechPersistence
+from src.speech.session_store import SessionStore
 
 
 def _utc_now() -> str:
