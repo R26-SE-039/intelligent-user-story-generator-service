@@ -5,14 +5,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from supabase_gateway import SupabaseGateway
+from postgres_gateway import PostgresGateway
 from src.models.schemas import Chunk, GeneratedStory, StoryIssue, Transcript
 
 
 class TextPersistence:
-    """Persist transcripts, chunks, and generated stories to Supabase."""
+    """Persist transcripts, chunks, and generated stories to PostgreSQL."""
 
-    def __init__(self, gateway: SupabaseGateway) -> None:
+    def __init__(self, gateway: PostgresGateway) -> None:
         self._gateway = gateway
 
     def save_transcript(self, transcript: Transcript) -> None:
@@ -29,8 +29,7 @@ class TextPersistence:
                 },
                 "updated_at": _utc_now(),
             },
-            on_conflict="transcript_id",
-            schema=self._gateway.settings.speech_schema
+            on_conflict="transcript_id"
         )
 
         utterance_rows = []
@@ -52,8 +51,7 @@ class TextPersistence:
             self._gateway.upsert(
                 self._gateway.settings.utterances_table, 
                 utterance_rows, 
-                on_conflict="utterance_id",
-                schema=self._gateway.settings.speech_schema
+                on_conflict="utterance_id"
             )
 
     def save_chunks(self, chunks: list[Chunk]) -> None:

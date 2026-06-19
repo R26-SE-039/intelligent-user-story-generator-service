@@ -6,13 +6,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 from src.speech.schemas import CaptionLine
-from supabase_gateway import SupabaseGateway
+from postgres_gateway import PostgresGateway
 
 
 class SpeechPersistence:
     """Persist speech sessions, captions, and transcription results."""
 
-    def __init__(self, gateway: SupabaseGateway) -> None:
+    def __init__(self, gateway: PostgresGateway) -> None:
         self._gateway = gateway
 
     def create_session(self, session_id: str) -> None:
@@ -25,8 +25,7 @@ class SpeechPersistence:
                 "started_at": _utc_now(),
                 "updated_at": _utc_now(),
             },
-            on_conflict="session_id",
-            schema=self._gateway.settings.speech_schema,
+            on_conflict="session_id"
         )
 
     def stop_session(self, session_id: str) -> None:
@@ -37,8 +36,7 @@ class SpeechPersistence:
                 "ended_at": _utc_now(),
                 "updated_at": _utc_now(),
             },
-            eq={"session_id": session_id},
-            schema=self._gateway.settings.speech_schema,
+            eq={"session_id": session_id}
         )
 
     def save_caption(self, session_id: str, caption: CaptionLine) -> None:
@@ -50,8 +48,7 @@ class SpeechPersistence:
                 "speaker": caption.speaker,
                 "text": caption.text,
                 "created_at": caption.created_at,
-            },
-            schema=self._gateway.settings.speech_schema,
+            }
         )
 
     def save_transcription(self, audio_url: str, payload: dict[str, Any]) -> None:
@@ -76,8 +73,7 @@ class SpeechPersistence:
                 },
                 "updated_at": _utc_now(),
             },
-            on_conflict="transcript_id",
-            schema=self._gateway.settings.speech_schema,
+            on_conflict="transcript_id"
         )
 
         if not utterances:
@@ -103,22 +99,19 @@ class SpeechPersistence:
         self._gateway.upsert(
             self._gateway.settings.utterances_table,
             rows,
-            on_conflict="utterance_id",
-            schema=self._gateway.settings.speech_schema,
+            on_conflict="utterance_id"
         )
 
     def save_meeting(self, meeting_data: dict[str, Any]) -> None:
         self._gateway.insert(
             self._gateway.settings.meetings_table,
-            meeting_data,
-            schema=self._gateway.settings.speech_schema,
+            meeting_data
         )
 
     def get_meeting(self, meeting_id: str) -> dict[str, Any] | None:
         results = self._gateway.select(
             self._gateway.settings.meetings_table,
-            eq={"meeting_id": meeting_id},
-            schema=self._gateway.settings.speech_schema,
+            eq={"meeting_id": meeting_id}
         )
         return results[0] if results else None
 
@@ -130,23 +123,20 @@ class SpeechPersistence:
                 "sender": sender,
                 "text": text,
                 "created_at": _utc_now(),
-            },
-            schema=self._gateway.settings.speech_schema,
+            }
         )
 
     def get_chats(self, meeting_id: str) -> list[dict[str, Any]]:
         return self._gateway.select(
             self._gateway.settings.chats_table,
-            eq={"meeting_id": meeting_id},
-            schema=self._gateway.settings.speech_schema,
+            eq={"meeting_id": meeting_id}
         )
 
     def get_meeting_captions(self, meeting_id: str) -> list[dict[str, Any]]:
         # Currently we use meeting_id as session_id in simple cases
         return self._gateway.select(
             self._gateway.settings.captions_table,
-            eq={"session_id": meeting_id},
-            schema=self._gateway.settings.speech_schema,
+            eq={"session_id": meeting_id}
         )
 
     def finalize_meeting_transcript(self, meeting_id: str) -> dict[str, Any] | None:
@@ -176,8 +166,7 @@ class SpeechPersistence:
                 },
                 "updated_at": _utc_now(),
             },
-            on_conflict="transcript_id",
-            schema=self._gateway.settings.speech_schema,
+            on_conflict="transcript_id"
         )
 
         # 2. Save to utterances table
@@ -200,8 +189,7 @@ class SpeechPersistence:
             self._gateway.upsert(
                 self._gateway.settings.utterances_table,
                 utterance_rows,
-                on_conflict="utterance_id",
-                schema=self._gateway.settings.speech_schema,
+                on_conflict="utterance_id"
             )
 
         return {"transcript_id": transcript_id, "utterance_count": len(utterance_rows)}

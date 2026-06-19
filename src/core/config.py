@@ -25,21 +25,22 @@ class Settings(BaseSettings):
     chunk_overlap_words: int = Field(default=40, alias="CHUNK_OVERLAP_WORDS")
     retrieval_top_k: int = Field(default=8, alias="RETRIEVAL_TOP_K")
 
-    # Supabase
-    supabase_url: str = Field(default="", alias="SUPABASE_URL")
-    supabase_key: str = Field(default="", alias="SUPABASE_SERVICE_ROLE_KEY")
-    supabase_schema: str = Field(default="nextgen_rag_service", alias="SUPABASE_SCHEMA")
-    supabase_speech_schema: str = Field(default="nextgen_speech_service", alias="SUPABASE_SPEECH_SCHEMA")
+    # PostgreSQL Database
+    db_host: str = Field(default="localhost", alias="DB_HOST")
+    db_port: int = Field(default=5432, alias="DB_PORT")
+    db_user: str = Field(default="postgres", alias="DB_USER")
+    db_password: str = Field(default="postgres", alias="DB_PASSWORD")
+    db_name: str = Field(default="agile_meeting_db", alias="DB_NAME")
     
-    supabase_transcripts_table: str = Field(default="transcripts", alias="SUPABASE_TRANSCRIPTS_TABLE")
-    supabase_utterances_table: str = Field(default="transcript_utterances", alias="SUPABASE_UTTERANCES_TABLE")
-    supabase_chunks_table: str = Field(default="transcript_chunks", alias="SUPABASE_CHUNKS_TABLE")
-    supabase_story_runs_table: str = Field(default="story_runs", alias="SUPABASE_STORY_RUNS_TABLE")
-    supabase_stories_table: str = Field(default="generated_stories", alias="SUPABASE_STORIES_TABLE")
-    supabase_speech_sessions_table: str = Field(default="speech_sessions", alias="SUPABASE_SPEECH_SESSIONS_TABLE")
-    supabase_captions_table: str = Field(default="speech_captions", alias="SUPABASE_CAPTIONS_TABLE")
-    supabase_meetings_table: str = Field(default="meetings", alias="SUPABASE_MEETINGS_TABLE")
-    supabase_chats_table: str = Field(default="meeting_chats", alias="SUPABASE_CHATS_TABLE")
+    transcripts_table: str = Field(default="transcripts", alias="DB_TRANSCRIPTS_TABLE")
+    utterances_table: str = Field(default="transcript_utterances", alias="DB_UTTERANCES_TABLE")
+    chunks_table: str = Field(default="transcript_chunks", alias="DB_CHUNKS_TABLE")
+    story_runs_table: str = Field(default="story_runs", alias="DB_STORY_RUNS_TABLE")
+    stories_table: str = Field(default="generated_stories", alias="DB_STORIES_TABLE")
+    speech_sessions_table: str = Field(default="speech_sessions", alias="DB_SPEECH_SESSIONS_TABLE")
+    captions_table: str = Field(default="speech_captions", alias="DB_CAPTIONS_TABLE")
+    meetings_table: str = Field(default="meetings", alias="DB_MEETINGS_TABLE")
+    chats_table: str = Field(default="meeting_chats", alias="DB_CHATS_TABLE")
 
     # Azure Speech Service
     azure_speech_key: str = Field(default="", alias="AZURE_SPEECH_KEY")

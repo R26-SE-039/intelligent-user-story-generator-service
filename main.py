@@ -13,7 +13,7 @@ from src.speech.routes import build_router as build_speech_router
 from src.speech.azure_client import AzureSpeechClient
 from src.speech.persistence import SpeechPersistence
 from src.speech.session_store import SessionStore
-from supabase_gateway import SupabaseGateway
+from postgres_gateway import PostgresGateway
 import uuid
 
 app = FastAPI(title="Intelligent User Story Generator", version="1.0.0")
@@ -31,7 +31,7 @@ pipeline = RAGPipeline.from_env()
 
 # ── Speech / Meeting Module ─────────────────────────────────────
 speech_settings = load_speech_settings()
-gateway = SupabaseGateway.from_env()
+gateway = PostgresGateway.from_env()
 session_store = SessionStore()
 azure_speech = AzureSpeechClient(speech_settings)
 speech_persistence = SpeechPersistence(gateway)
