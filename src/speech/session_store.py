@@ -19,7 +19,16 @@ class SessionStore:
         self._sessions: dict[str, list[CaptionLine]] = {}
         self._participants: dict[str, dict[str, str]] = {}  # meeting_id -> {conn_id: name}
         self._connections: dict[str, list[Any]] = {}  # meeting_id -> [websocket_objs]
+        self._passcodes: dict[str, str] = {} # meeting_id -> passcode
         self._lock = Lock()
+
+    def register_passcode(self, meeting_id: str, passcode: str) -> None:
+        with self._lock:
+            self._passcodes[meeting_id] = passcode
+
+    def validate_passcode(self, meeting_id: str, passcode: str) -> bool:
+        with self._lock:
+            return self._passcodes.get(meeting_id) == passcode
 
     def create_session(self) -> str:
         session_id = f"voice-{uuid4()}"

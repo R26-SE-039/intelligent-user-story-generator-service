@@ -1,4 +1,4 @@
-"""Supabase-backed persistence helpers for the text-to-user-stories service."""
+"""PostgreSQL-backed persistence helpers for the text-to-user-stories service."""
 
 from __future__ import annotations
 
@@ -6,123 +6,136 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from postgres_gateway import PostgresGateway
-from src.models.schemas import Chunk, GeneratedStory, StoryIssue, Transcript
+from src.models.schemas import Requirement, GeneratedStory, StoryIssue, Transcript, Conflict
 
 
 class TextPersistence:
-    """Persist transcripts, chunks, and generated stories to PostgreSQL."""
+    """Persist transcripts, stories, and requirements to PostgreSQL."""
 
     def __init__(self, gateway: PostgresGateway) -> None:
         self._gateway = gateway
 
     def save_transcript(self, transcript: Transcript) -> None:
-        participants = transcript.participants or sorted({item.speaker for item in transcript.utterances})
+        # Save Transcript
         self._gateway.upsert(
             self._gateway.settings.transcripts_table,
             {
-                "transcript_id": transcript.transcript_id,
-                "project_id": transcript.project_id,
-                "source": transcript.source,
-                "participants": participants,
-                "metadata": {
-                    "product_area": transcript.product_area,
-                },
-                "updated_at": _utc_now(),
+                "id": transcript.transcript_id,
+                "meeting_id": transcript.meeting_id,
+                "created_at": _utc_now(),
             },
-            on_conflict="transcript_id"
+            on_conflict="id"
         )
 
+        # Save Utterances
         utterance_rows = []
         for index, item in enumerate(transcript.utterances):
             utterance_rows.append(
                 {
-                    "utterance_id": f"{transcript.transcript_id}:{index}",
+                    "id": str(uuid4()), # We generate a UUID for the utterance
                     "transcript_id": transcript.transcript_id,
-                    "utterance_index": index,
-                    "speaker": item.speaker,
-                    "text": item.text,
-                    "timestamp_start": item.timestamp_start,
-                    "timestamp_end": item.timestamp_end,
-                    "metadata": {},
+                    "speaker_id": item.speaker_id,
+                    "utterance_text": item.text,
+                    "start_time": item.timestamp_start,
+                    "end_time": item.timestamp_end,
+                    "confidence_score": getattr(item, "confidence_score", None)
                 }
             )
 
         if utterance_rows:
             self._gateway.upsert(
-                self._gateway.settings.utterances_table, 
+                self._gateway.settings.transcript_utterances_table, 
                 utterance_rows, 
-                on_conflict="utterance_id"
+                on_conflict="id"
             )
 
-    def save_chunks(self, chunks: list[Chunk]) -> None:
-        if not chunks:
+    def save_requirements(self, requirements: list[Requirement]) -> None:
+        if not requirements:
             return
 
         rows = []
-        for chunk in chunks:
+        for req in requirements:
             rows.append(
                 {
-                    "chunk_id": chunk.chunk_id,
-                    "transcript_id": chunk.transcript_id,
-                    "chunk_index": chunk.chunk_index,
-                    "text": chunk.text,
-                    "speakers": chunk.speakers,
-                    "timestamp_start": chunk.timestamp_start,
-                    "timestamp_end": chunk.timestamp_end,
-                    "metadata": chunk.metadata,
+                    "id": req.requirement_id,
+                    "meeting_id": req.meeting_id,
+                    "requirement_text": req.requirement_text,
+                    "requirement_type": req.requirement_type,
+                    "status": req.status,
+                    "created_at": _utc_now(),
                 }
             )
+        self._gateway.upsert(self._gateway.settings.requirements_table, rows, on_conflict="id")
 
-        self._gateway.upsert(self._gateway.settings.chunks_table, rows, on_conflict="chunk_id")
+    def save_requirement_embeddings(self, embeddings: list[dict[str, any]]) -> None:
+        # Not fully implemented without pgvector python wrapper, left as placeholder for pgvector inserts
+        pass
 
-    def save_story_run(
+    def save_requirement_utterance_mappings(self, mappings: list[dict[str, str]]) -> None:
+        if not mappings:
+            return
+        self._gateway.upsert(self._gateway.settings.requirement_utterance_mapping_table, mappings, on_conflict="requirement_id")
+
+    def save_user_stories(
         self,
         *,
-        transcript_id: str | None,
-        project_id: str | None = None,
-        query: str,
-        stories: list[GeneratedStory],
-        issues: list[StoryIssue],
-        evidence_chunk_ids: list[str],
+        meeting_id: str | None = None,
+        stories: list[GeneratedStory]
     ) -> None:
-        story_run_id = f"run-{uuid4()}"
-        self._gateway.insert(
-            self._gateway.settings.story_runs_table,
-            {
-                "story_run_id": story_run_id,
-                "transcript_id": transcript_id,
-                "project_id": project_id,
-                "query": query,
-                "issues": [item.model_dump() for item in issues],
-                "evidence_chunk_ids": evidence_chunk_ids,
-                "created_at": _utc_now(),
-            },
-        )
-
         if not stories:
             return
 
         story_rows = []
+        ac_rows = []
+        
         for story in stories:
+            story_id = story.story_id
             story_rows.append(
                 {
-                    "generated_story_id": f"{story_run_id}:{story.story_id}",
-                    "story_run_id": story_run_id,
-                    "transcript_id": transcript_id,
-                    "story_id": story.story_id,
+                    "id": story_id,
+                    "meeting_id": meeting_id,
                     "title": story.title,
                     "story": story.story,
-                    "acceptance_criteria": story.acceptance_criteria,
                     "priority": story.priority,
-                    "confidence": story.confidence,
                     "status": story.status,
-                    "clarification_questions": story.clarification_questions,
-                    "evidence_refs": story.evidence_refs,
                 }
             )
+            
+            for ac in story.acceptance_criteria:
+                ac_rows.append(
+                    {
+                        "id": str(uuid4()),
+                        "user_story_id": story_id,
+                        "criteria": ac
+                    }
+                )
 
-        self._gateway.insert(self._gateway.settings.stories_table, story_rows)
+        self._gateway.upsert(self._gateway.settings.user_stories_table, story_rows, on_conflict="id")
+        self._gateway.upsert(self._gateway.settings.acceptance_criteria_table, ac_rows, on_conflict="id")
 
+    def save_user_story_requirement_mappings(self, mappings: list[dict[str, str]]) -> None:
+        if not mappings:
+            return
+        # mappings format: [{"user_story_id": "...", "requirement_id": "..."}]
+        self._gateway.upsert(self._gateway.settings.user_story_requirement_mapping_table, mappings, on_conflict="user_story_id")
+
+    def save_conflicts(self, conflicts: list[Conflict]) -> None:
+        if not conflicts:
+            return
+        
+        rows = []
+        for conflict in conflicts:
+            rows.append(
+                {
+                    "id": conflict.conflict_id,
+                    "requirement_a_id": conflict.requirement_a_id,
+                    "requirement_b_id": conflict.requirement_b_id,
+                    "conflict_type": conflict.conflict_type,
+                    "severity": conflict.severity,
+                    "explanation": conflict.explanation
+                }
+            )
+        self._gateway.upsert(self._gateway.settings.conflicts_table, rows, on_conflict="id")
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()

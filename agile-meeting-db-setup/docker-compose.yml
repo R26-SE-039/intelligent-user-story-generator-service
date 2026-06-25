@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:latest
+    image: pgvector/pgvector:pg16
     container_name: agile_meeting_db
     restart: always
     env_file:

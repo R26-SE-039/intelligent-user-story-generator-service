@@ -57,21 +57,21 @@ def build_router(
         body: MeetingCreateRequest,
         user: dict = Depends(get_current_user)
     ) -> MeetingResponse:
-        meeting_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=9))
+        meeting_id = str(uuid.uuid4())
         passcode = ''.join(random.choices(string.digits, k=6))
         
         meeting_data = {
-            "meeting_id": meeting_id,
-            "name": body.name,
+            "id": meeting_id,
+            "organization_id": None,
             "project_id": body.project_id,
             "host_id": user["id"],
-            "passcode": passcode,
-            "mode": body.mode,
+            "title": body.name,
             "status": "active",
             "created_at": _utc_now(),
         }
         
         persistence.save_meeting(meeting_data)
+        store.register_passcode(meeting_id, passcode)
         
         # In a real app, this link would point to your frontend domain
         invite_link = f"http://localhost:5173/login?meetingId={meeting_id}&passcode={passcode}"
@@ -95,16 +95,16 @@ def build_router(
         if not meeting:
             raise HTTPException(status_code=404, detail="Meeting not found")
             
-        if meeting["passcode"] != body.passcode:
+        if not store.validate_passcode(body.meeting_id, body.passcode):
             raise HTTPException(status_code=401, detail="Invalid passcode")
             
         return MeetingResponse(
             status="success",
-            meeting_id=meeting["meeting_id"],
+            meeting_id=meeting["id"],
             project_id=meeting.get("project_id"),
-            passcode=meeting["passcode"],
-            invite_link=f"http://localhost:5173/login?meetingId={meeting['meeting_id']}&passcode={meeting['passcode']}",
-            name=meeting["name"]
+            passcode=body.passcode,
+            invite_link=f"http://localhost:5173/login?meetingId={meeting['id']}&passcode={body.passcode}",
+            name=meeting["title"]
         )
 
     @router.get("/meeting/{meeting_id}/chats")
@@ -163,7 +163,8 @@ def build_router(
         websocket: WebSocket,
         meeting_id: str,
         name: str = "Anonymous",
-        role: str | None = None
+        role: str | None = None,
+        user_id: str | None = None
     ):
         await websocket.accept()
         conn_id = str(uuid.uuid4())
@@ -268,7 +269,8 @@ def build_router(
                     data = json.loads(msg["text"])
                     if data.get("type") == "chat":
                         text = data.get("text", "")
-                        persistence.save_chat(meeting_id, name, text)
+                        sender_id = user_id or str(uuid.uuid4())
+                        persistence.save_chat(meeting_id, sender_id, text)
                         for conn in store.get_connections(meeting_id):
                             try:
                                 await conn.send_json({
@@ -299,7 +301,7 @@ def build_router(
             # If this was the last person, auto-finalize the transcript
             if not participants:
                 print(f"[Meeting] {meeting_id} is empty. Auto-finalizing transcript...")
-                persistence.finalize_meeting_transcript(meeting_id)
+                persistence.finalize_meeting_transcript(meeting_id, store.get_captions(meeting_id))
             else:
                 # Otherwise, just notify the remaining people
                 for conn in store.get_connections(meeting_id):

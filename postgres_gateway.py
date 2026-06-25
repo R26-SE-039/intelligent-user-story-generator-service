@@ -30,15 +30,17 @@ class PostgresSettings:
     password: str
     dbname: str
     
-    transcripts_table: str
-    utterances_table: str
-    chunks_table: str
-    story_runs_table: str
-    stories_table: str
-    speech_sessions_table: str
-    captions_table: str
     meetings_table: str
-    chats_table: str
+    chat_messages_table: str
+    transcripts_table: str
+    transcript_utterances_table: str
+    requirements_table: str
+    requirement_embeddings_table: str
+    requirement_utterance_mapping_table: str
+    conflicts_table: str
+    user_stories_table: str
+    user_story_requirement_mapping_table: str
+    acceptance_criteria_table: str
 
     @property
     def enabled(self) -> bool:
@@ -55,15 +57,17 @@ def load_postgres_settings() -> PostgresSettings:
         user=s.db_user.strip(),
         password=s.db_password.strip(),
         dbname=s.db_name.strip(),
-        transcripts_table=s.transcripts_table.strip(),
-        utterances_table=s.utterances_table.strip(),
-        chunks_table=s.chunks_table.strip(),
-        story_runs_table=s.story_runs_table.strip(),
-        stories_table=s.stories_table.strip(),
-        speech_sessions_table=s.speech_sessions_table.strip(),
-        captions_table=s.captions_table.strip(),
         meetings_table=s.meetings_table.strip(),
-        chats_table=s.chats_table.strip(),
+        chat_messages_table=s.chat_messages_table.strip(),
+        transcripts_table=s.transcripts_table.strip(),
+        transcript_utterances_table=s.transcript_utterances_table.strip(),
+        requirements_table=s.requirements_table.strip(),
+        requirement_embeddings_table=s.requirement_embeddings_table.strip(),
+        requirement_utterance_mapping_table=s.requirement_utterance_mapping_table.strip(),
+        conflicts_table=s.conflicts_table.strip(),
+        user_stories_table=s.user_stories_table.strip(),
+        user_story_requirement_mapping_table=s.user_story_requirement_mapping_table.strip(),
+        acceptance_criteria_table=s.acceptance_criteria_table.strip(),
     )
 
 
@@ -179,6 +183,27 @@ class PostgresGateway:
             query_vals.append(v)
 
         query = f"UPDATE {target} SET {', '.join(set_clauses)} WHERE {' AND '.join(where_clauses)}"
+
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, tuple(query_vals))
+            conn.commit()
+
+    def delete(self, table: str, *, eq: dict[str, Any], schema: str | None = None) -> None:
+        if not eq:
+            return
+
+        target = f'"{table}"'
+        if schema:
+            target = f'"{schema}"."{table}"'
+
+        where_clauses = []
+        query_vals = []
+        for k, v in eq.items():
+            where_clauses.append(f'"{k}" = %s')
+            query_vals.append(v)
+
+        query = f"DELETE FROM {target} WHERE {' AND '.join(where_clauses)}"
 
         with self._get_connection() as conn:
             with conn.cursor() as cur:

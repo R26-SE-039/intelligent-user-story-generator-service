@@ -11,15 +11,18 @@ class Utterance(BaseModel):
     """Single speaker utterance in a transcript."""
 
     speaker: str
+    speaker_id: str | None = None
     text: str
     timestamp_start: float | None = None
     timestamp_end: float | None = None
+    confidence_score: float | None = None
 
 
 class Transcript(BaseModel):
     """Transcript payload to ingest and index."""
 
     transcript_id: str
+    meeting_id: str | None = None
     project_id: str | None = None
     source: str | None = None
     participants: list[str] = Field(default_factory=list)
@@ -38,6 +41,27 @@ class Chunk(BaseModel):
     timestamp_start: float | None = None
     timestamp_end: float | None = None
     metadata: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
+
+
+class Requirement(BaseModel):
+    """Structured requirement extracted from meeting."""
+
+    requirement_id: str
+    meeting_id: str | None = None
+    requirement_text: str
+    requirement_type: str
+    status: str = "active"
+
+
+class Conflict(BaseModel):
+    """Conflict between requirements."""
+
+    conflict_id: str
+    requirement_a_id: str
+    requirement_b_id: str
+    conflict_type: str
+    severity: str
+    explanation: str
 
 
 class GeneratedStory(BaseModel):

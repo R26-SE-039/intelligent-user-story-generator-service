@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from persistence import TextPersistence
-from supabase_gateway import SupabaseGateway
+from postgres_gateway import PostgresGateway
 from src.core.config import Settings
 from src.generation.story_generator import StoryGenerator
 from src.ingestion.preprocess import chunk_transcript
@@ -36,7 +36,7 @@ class RAGPipeline:
 
 	@classmethod
 	def from_env(cls) -> "RAGPipeline":
-		return cls(Settings(), persistence=TextPersistence(SupabaseGateway.from_env()))
+		return cls(Settings(), persistence=TextPersistence(PostgresGateway.from_env()))
 
 	def ingest_transcript(self, transcript: Transcript):
 		"""Return processed transcript chunks without indexing."""
@@ -47,7 +47,6 @@ class RAGPipeline:
 		)
 		if self.persistence is not None:
 			self.persistence.save_transcript(transcript)
-			self.persistence.save_chunks(chunks)
 		return chunks
 
 	def index_transcript(self, transcript: Transcript) -> int:
@@ -81,13 +80,9 @@ class RAGPipeline:
 			evidence_chunk_ids=[item.chunk_id for item in evidence],
 		)
 		if self.persistence is not None:
-			self.persistence.save_story_run(
-				transcript_id=transcript_id,
-				project_id=project_id,
-				query=response.query,
-				stories=response.stories,
-				issues=response.issues,
-				evidence_chunk_ids=response.evidence_chunk_ids,
+			self.persistence.save_user_stories(
+				meeting_id=transcript_id,
+				stories=response.stories
 			)
 		return response
 
