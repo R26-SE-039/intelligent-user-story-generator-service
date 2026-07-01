@@ -1,0 +1,13 @@
+"""Application-wide constants."""
+
+STORY_STATUS_READY = "ready"
+STORY_STATUS_NEEDS_CLARIFICATION = "needs_clarification"
+
+REQUIREMENT_STATUS_ACTIVE = "active"
+
+MEETING_STATUS_ACTIVE = "active"
+MEETING_STATUS_COMPLETED = "completed"
+
+STORY_PRIORITY_MUST = "Must"
+STORY_PRIORITY_SHOULD = "Should"
+STORY_PRIORITY_COULD = "Could"

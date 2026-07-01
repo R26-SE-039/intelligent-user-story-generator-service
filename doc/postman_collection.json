@@ -1,8 +1,8 @@
 {
 	"info": {
 		"_postman_id": "84e2a6d7-8461-4c6e-91a1-62220c41dbef",
-		"name": "Intelligent Voice Parser Service",
-		"description": "API collection for the Meeting Orchestration and Voice Parsing microservice.",
+		"name": "Intelligent User Story Generator",
+		"description": "API collection for the Meeting Orchestration and User Story Generation microservice.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -10,7 +10,7 @@
 			"name": "General",
 			"item": [
 				{
-					"name": "Health Check",
+					"name": "Health Check (Root)",
 					"request": {
 						"method": "GET",
 						"header": [],
@@ -20,6 +20,24 @@
 								"{{base_url}}"
 							],
 							"path": [
+								"health"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Health Check (Speech)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/speech/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"speech",
 								"health"
 							]
 						}
@@ -44,7 +62,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"name\": \"Sprint Planning\",\n    \"is_recorded\": true\n}",
+							"raw": "{\n    \"name\": \"Sprint Planning\",\n    \"project_id\": \"b385eb7b-f54f-45ae-9310-62d2df09dcc1\",\n    \"mode\": \"instant\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -52,11 +70,12 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/meeting/create",
+							"raw": "{{base_url}}/speech/meeting/create",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
+								"speech",
 								"meeting",
 								"create"
 							]
@@ -85,11 +104,12 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/meeting/join",
+							"raw": "{{base_url}}/speech/meeting/join",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
+								"speech",
 								"meeting",
 								"join"
 							]
@@ -114,11 +134,12 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/meeting/{{meeting_id}}/chats",
+							"raw": "{{base_url}}/speech/meeting/{{meeting_id}}/chats",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
+								"speech",
 								"meeting",
 								"{{meeting_id}}",
 								"chats"
@@ -139,14 +160,41 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/meeting/{{meeting_id}}/transcript",
+							"raw": "{{base_url}}/speech/meeting/{{meeting_id}}/transcript",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
+								"speech",
 								"meeting",
 								"{{meeting_id}}",
 								"transcript"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Finalize Meeting",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/speech/meeting/{{meeting_id}}/finalize",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"speech",
+								"meeting",
+								"{{meeting_id}}",
+								"finalize"
 							]
 						}
 					},
@@ -178,11 +226,12 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/meeting/{{meeting_id}}/analyze",
+							"raw": "{{base_url}}/speech/meeting/{{meeting_id}}/analyze",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
+								"speech",
 								"meeting",
 								"{{meeting_id}}",
 								"analyze"
@@ -212,14 +261,97 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/meeting/{{meeting_id}}/analyze",
+							"raw": "{{base_url}}/speech/meeting/{{meeting_id}}/analyze",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
+								"speech",
 								"meeting",
 								"{{meeting_id}}",
 								"analyze"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Pipeline",
+			"item": [
+				{
+					"name": "Upload Transcript",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								},
+								{
+									"key": "query",
+									"value": "Generate user stories for the new dashboard feature.",
+									"type": "text"
+								},
+								{
+									"key": "project_id",
+									"value": "b385eb7b-f54f-45ae-9310-62d2df09dcc1",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/pipeline/upload",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pipeline",
+								"upload"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Run Pipeline (JSON)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"transcript\": {\n        \"transcript_id\": \"transcript-123\",\n        \"source\": \"manual\",\n        \"utterances\": [\n            {\n                \"speaker\": \"Alice\",\n                \"text\": \"We need a dashboard for analytics.\",\n                \"timestamp_start\": 0.0\n            },\n            {\n                \"speaker\": \"Bob\",\n                \"text\": \"Yes, and it should show user metrics.\",\n                \"timestamp_start\": 2.0\n            }\n        ]\n    },\n    \"query\": \"Generate stories about the dashboard\",\n    \"top_k\": 5\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/pipeline/run",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pipeline",
+								"run"
 							]
 						}
 					},

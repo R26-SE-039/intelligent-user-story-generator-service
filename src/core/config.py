@@ -3,9 +3,49 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import dataclass
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+@dataclass(frozen=True)
+class PostgresSettings:
+    """Environment-driven PostgreSQL configuration."""
+
+    host: str
+    port: int
+    user: str
+    password: str
+    dbname: str
+    
+    meetings_table: str
+    chat_messages_table: str
+    transcripts_table: str
+    transcript_utterances_table: str
+    requirements_table: str
+    requirement_embeddings_table: str
+    requirement_utterance_mapping_table: str
+    conflicts_table: str
+    user_stories_table: str
+    user_story_requirement_mapping_table: str
+    acceptance_criteria_table: str
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.host and self.user and self.dbname)
+
+
+@dataclass(frozen=True)
+class SpeechServiceSettings:
+    """Runtime settings for speech/meeting features."""
+
+    transcription_timeout_seconds: int
+    polling_interval_seconds: float
+    cors_origins: list[str]
+    auth_secret: str
+    azure_speech_key: str
+    azure_speech_region: str
 
 
 class Settings(BaseSettings):
@@ -61,4 +101,47 @@ class Settings(BaseSettings):
         extra="ignore",
         populate_by_name=True,
         case_sensitive=False,
+    )
+
+
+def load_postgres_settings() -> PostgresSettings:
+    s = Settings()
+    return PostgresSettings(
+        host=s.db_host.strip(),
+        port=s.db_port,
+        user=s.db_user.strip(),
+        password=s.db_password.strip(),
+        dbname=s.db_name.strip(),
+        meetings_table=s.meetings_table.strip(),
+        chat_messages_table=s.chat_messages_table.strip(),
+        transcripts_table=s.transcripts_table.strip(),
+        transcript_utterances_table=s.transcript_utterances_table.strip(),
+        requirements_table=s.requirements_table.strip(),
+        requirement_embeddings_table=s.requirement_embeddings_table.strip(),
+        requirement_utterance_mapping_table=s.requirement_utterance_mapping_table.strip(),
+        conflicts_table=s.conflicts_table.strip(),
+        user_stories_table=s.user_stories_table.strip(),
+        user_story_requirement_mapping_table=s.user_story_requirement_mapping_table.strip(),
+        acceptance_criteria_table=s.acceptance_criteria_table.strip(),
+    )
+
+
+def load_speech_settings() -> SpeechServiceSettings:
+    s = Settings()
+    return SpeechServiceSettings(
+        transcription_timeout_seconds=s.transcription_timeout_seconds,
+        polling_interval_seconds=s.transcription_poll_interval_seconds,
+        cors_origins=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:5174",
+            "http://127.0.0.1:5174",
+            "http://localhost:5175",
+            "http://127.0.0.1:5175",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ],
+        auth_secret=s.auth_secret.strip(),
+        azure_speech_key=s.azure_speech_key.strip(),
+        azure_speech_region=s.azure_speech_region.strip(),
     )

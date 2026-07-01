@@ -25,6 +25,19 @@ Every request (except health) requires an `Authorization: Bearer <token>` header
 ### WebSocket Connection
 Connect to `ws://localhost:8001/ws/{{meeting_id}}?name={{your_name}}` for real-time audio and chat streaming.
 
+## Architecture
+
+The project has been refactored into a modular **Clean Architecture** to ensure separation of concerns and maintainability.
+
+- **`src/api/`**: Thin controllers (`routes/`), middlewares, and shared dependencies (like JWT validation).
+- **`src/core/`**: Centralized configuration (`config.py`), logging, constants, and security utilities.
+- **`src/db/`**: Low-level database connections and drivers (Postgres, ChromaDB), plus migration scripts (`migrations/`).
+- **`src/models/`**: Pydantic domain models (e.g., transcripts, requirements, user stories, conflicts).
+- **`src/repositories/`**: Data access abstraction. Services talk to repositories, never directly to the database.
+- **`src/services/`**: Core business logic modules (speech transcription, vector retrieval, LLM story generation).
+- **`src/prompts/`**: Central storage for all LLM prompts as `.txt` files.
+- **`src/pipeline/`**: Orchestration components that string together ingestion, retrieval, generation, and validation.
+
 ## Database Schema
 
 The service uses a normalized PostgreSQL database with `pgvector` for embeddings.
@@ -137,24 +150,60 @@ erDiagram
 
 ## Getting Started
 
-### 1. Database Setup
-The service requires a PostgreSQL database with the `pgvector` extension.
+### Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (includes Docker Compose)
+- An `.env` file — copy from `.env.example` and fill in your API keys
+
+### 1. Configure Environment Variables
 ```bash
-cd agile-meeting-db-setup
-docker-compose up -d --build
+cp .env.example .env
+```
+Edit `.env` and fill in:
+- `LLM_API_KEY` — OpenRouter or OpenAI key
+- `AZURE_SPEECH_KEY` / `AZURE_SPEECH_REGION` — Azure Speech credentials
+- `AUTH_SECRET` — must match the value in your **Auth Service**
+
+The database connection is pre-configured for Docker:
+```
+DATABASE_URL=postgresql://meeting:nextgen_db@localhost:5434/meeting_db
+DB_HOST=localhost
+DB_PORT=5434
+DB_USER=meeting
+DB_PASSWORD=nextgen_db
+DB_NAME=meeting_db
 ```
 
-### 2. Environment Variables
-Ensure you have a `.env` file configured in the root directory (refer to `.env.example`). Key variables include:
-- `DB_*_TABLE` naming conventions
-- `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION`
-- `LLM_API_KEY` and `CHAT_MODEL`
-- `AUTH_SECRET` for JWT validation
+### 2. Start the PostgreSQL Database (Docker)
+The project ships a `docker-compose.yml` in the root directory. The database uses the `pgvector/pgvector:pg16` image so `pgvector` is available out of the box. The schema in `src/db/migrations/init.sql` is applied automatically on first start.
 
-### 3. Run the Service
-Install dependencies and run the FastAPI server:
+```bash
+# Start only the database (recommended during local development)
+docker-compose up -d db
+```
+
+| Container | Image | Host Port | DB |
+|---|---|---|---|
+| `meeting_db` | `pgvector/pgvector:pg16` | `5434` | `meeting_db` |
+
+> **Note**: Port `5434` is used to avoid conflicts with the Auth Service which runs on `5433`.
+
+### 3. Run the Application (Local Dev)
 ```bash
 pip install -r requirements.txt
-python main.py
+uvicorn src.main:app --host 0.0.0.0 --port 8001 --reload
 ```
-The service will start on `http://localhost:8001`. You can access the Swagger UI documentation and test endpoints at `http://localhost:8001/docs`.
+
+### 4. Run Everything with Docker (Production)
+To spin up **both** the database and the application together:
+```bash
+docker-compose up --build
+```
+
+The service will be available at `http://localhost:8001`.
+Swagger UI: `http://localhost:8001/docs`
+
+### 5. Stop the Containers
+```bash
+docker-compose down        # Stop containers, keep data volume
+docker-compose down -v     # Stop containers AND delete DB data
+```

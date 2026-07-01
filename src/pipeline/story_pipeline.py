@@ -1,0 +1,145 @@
+"""Orchestrate ingestion, retrieval, generation, and validation steps."""
+
+from __future__ import annotations
+
+import logging
+
+from src.core.config import Settings
+from src.core.logger import get_logger
+from src.db.postgres import PostgresGateway
+from src.db.chroma import ChromaVectorStore
+from src.repositories.embedding_repository import EmbeddingRepository
+from src.repositories.user_story_repository import UserStoryRepository
+from src.repositories.transcript_repository import TranscriptRepository
+from src.services.speech.transcription_service import TranscriptionService
+from src.services.retrieval.chroma_service import ChromaService
+from src.services.retrieval.retriever import Retriever
+from src.services.generation.story_generator import StoryGenerator
+from src.services.generation.story_validator import validate_stories
+
+from src.models.schemas import (
+    GenerateStoriesRequest,
+    GenerateStoriesResponse,
+    PipelineRunRequest,
+    PipelineRunResponse,
+    Transcript,
+)
+
+LOGGER = get_logger(__name__)
+
+
+class StoryPipeline:
+    """Pipeline that performs transcript chunking, retrieval, and story generation."""
+
+    def __init__(
+        self, 
+        settings: Settings, 
+        transcript_repo: TranscriptRepository | None = None,
+        story_repo: UserStoryRepository | None = None
+    ) -> None:
+        self.settings = settings
+        self.transcript_repo = transcript_repo
+        self.story_repo = story_repo
+        
+        self.vector_store = ChromaVectorStore(settings)
+        self.embedding_repo = EmbeddingRepository(self.vector_store)
+        self.chroma_service = ChromaService(self.embedding_repo)
+        
+        self.retriever = Retriever(self.chroma_service)
+        self.transcription_service = TranscriptionService()
+        self.story_generator = StoryGenerator(settings.llm_api_key, settings.chat_model, settings.llm_api_base)
+
+    @classmethod
+    def from_env(cls) -> "StoryPipeline":
+        settings = Settings()
+        gateway = PostgresGateway.from_env()
+        return cls(
+            settings,
+            transcript_repo=TranscriptRepository(gateway),
+            story_repo=UserStoryRepository(gateway)
+        )
+
+    def ingest_transcript(self, transcript: Transcript):
+        """Return processed transcript chunks without indexing."""
+        chunks = self.transcription_service.chunk_transcript(
+            transcript,
+            chunk_size_words=self.settings.chunk_size_words,
+            chunk_overlap_words=self.settings.chunk_overlap_words,
+        )
+        if self.transcript_repo is not None:
+            self.transcript_repo.save(transcript)
+        return chunks
+
+    def index_transcript(self, transcript: Transcript) -> int:
+        """Chunk transcript and upsert chunks into vector store."""
+        chunks = self.ingest_transcript(transcript)
+        if not chunks:
+            return 0
+        self.chroma_service.index_chunks(chunks)
+        LOGGER.info("Indexed %s chunks for transcript_id=%s", len(chunks), transcript.transcript_id)
+        return len(chunks)
+
+    def _generate_stories(
+        self,
+        request: GenerateStoriesRequest,
+        *,
+        transcript_id: str | None = None,
+        project_id: str | None = None,
+    ) -> GenerateStoriesResponse:
+        """Retrieve evidence and generate validated stories."""
+        top_k = request.top_k or self.settings.retrieval_top_k
+        evidence = self.retriever.retrieve(request.query, top_k=top_k, filters=request.filters)
+        if not evidence:
+            raise ValueError("No evidence found for query. Index transcripts first or adjust filters.")
+
+        batch = self.story_generator.generate(query=request.query, evidence=evidence)
+        issues = validate_stories(batch)
+        response = GenerateStoriesResponse(
+            query=request.query,
+            stories=batch.stories,
+            issues=issues,
+            evidence_chunk_ids=[item.chunk_id for item in evidence],
+        )
+        if self.story_repo is not None:
+            self.story_repo.save(
+                stories=response.stories,
+                meeting_id=transcript_id
+            )
+        return response
+
+    def generate_stories(self, request: GenerateStoriesRequest) -> GenerateStoriesResponse:
+        return self._generate_stories(request)
+
+    def run(self, request: PipelineRunRequest) -> PipelineRunResponse:
+        """Run index + retrieve + generate in a single operation with phase tracking."""
+        LOGGER.info("--- Starting Pipeline Run for transcript_id=%s ---", request.transcript.transcript_id)
+        
+        # Phase 1: Indexing
+        LOGGER.info("[Phase 1/4] Chunking and Indexing transcript...")
+        indexed_chunks = self.index_transcript(request.transcript)
+        
+        # Phase 2: Generation
+        LOGGER.info("[Phase 2/4] Retrieving context and generating stories via AI...")
+        generation = self._generate_stories(
+            GenerateStoriesRequest(
+                query=request.query,
+                top_k=request.top_k,
+                filters=request.filters,
+            ),
+            transcript_id=request.transcript.transcript_id,
+            project_id=request.transcript.project_id,
+        )
+        
+        LOGGER.info("[Phase 3/4] Stories generated and validated successfully.")
+        
+        # Phase 4: Finalizing
+        LOGGER.info("[Phase 4/4] Pipeline completed for transcript_id=%s", request.transcript.transcript_id)
+        
+        return PipelineRunResponse(
+            transcript_id=request.transcript.transcript_id,
+            indexed_chunks=indexed_chunks,
+            query=request.query,
+            stories=generation.stories,
+            issues=generation.issues,
+            evidence_chunk_ids=generation.evidence_chunk_ids,
+        )
