@@ -30,6 +30,7 @@ class PostgresSettings:
     user_stories_table: str
     user_story_requirement_mapping_table: str
     acceptance_criteria_table: str
+    meeting_participants_table: str
 
     @property
     def enabled(self) -> bool:
@@ -83,6 +84,7 @@ class Settings(BaseSettings):
     user_stories_table: str = Field(default="user_stories", alias="DB_USER_STORIES_TABLE")
     user_story_requirement_mapping_table: str = Field(default="user_story_requirement_mapping", alias="DB_USER_STORY_REQUIREMENT_MAPPING_TABLE")
     acceptance_criteria_table: str = Field(default="acceptance_criteria", alias="DB_ACCEPTANCE_CRITERIA_TABLE")
+    meeting_participants_table: str = Field(default="meeting_participants", alias="DB_MEETING_PARTICIPANTS_TABLE")
 
     # Azure Speech Service
     azure_speech_key: str = Field(default="", alias="AZURE_SPEECH_KEY")
@@ -123,6 +125,7 @@ def load_postgres_settings() -> PostgresSettings:
         user_stories_table=s.user_stories_table.strip(),
         user_story_requirement_mapping_table=s.user_story_requirement_mapping_table.strip(),
         acceptance_criteria_table=s.acceptance_criteria_table.strip(),
+        meeting_participants_table=s.meeting_participants_table.strip(),
     )
 
 

@@ -26,6 +26,15 @@ CREATE TABLE chat_messages (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Table: MEETING_PARTICIPANTS
+CREATE TABLE meeting_participants (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    meeting_id UUID REFERENCES meetings(id) ON DELETE CASCADE,
+    user_id UUID,
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(meeting_id, user_id)
+);
+
 -- Table: TRANSCRIPTS
 CREATE TABLE transcripts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -107,6 +116,7 @@ CREATE TABLE acceptance_criteria (
 CREATE INDEX idx_meetings_project_id ON meetings(project_id);
 CREATE INDEX idx_chat_messages_meeting_id ON chat_messages(meeting_id);
 CREATE INDEX idx_transcripts_meeting_id ON transcripts(meeting_id);
+CREATE INDEX idx_meeting_participants_meeting_id ON meeting_participants(meeting_id);
 CREATE INDEX idx_transcript_utterances_transcript_id ON transcript_utterances(transcript_id);
 CREATE INDEX idx_requirements_meeting_id ON requirements(meeting_id);
 CREATE INDEX idx_user_stories_meeting_id ON user_stories(meeting_id);

@@ -49,15 +49,16 @@ def create_meeting(
     
     meeting_data = {
         "id": meeting_id,
-        "organization_id": None,
+        "organization_id": user.get("organization_id"),
         "project_id": body.project_id,
         "host_id": user["id"],
         "title": body.name,
         "status": "active",
-        "created_at": utc_now(),
+        "start_time": utc_now(),
     }
     
     _meeting_repo.save_meeting(meeting_data)
+    _meeting_repo.add_participant(meeting_id, user["id"])
     _transcription_service.register_passcode(meeting_id, passcode)
     
     # In a real app, this link would point to your frontend domain
@@ -85,6 +86,8 @@ def join_meeting(
     if not _transcription_service.validate_passcode(body.meeting_id, body.passcode):
         raise HTTPException(status_code=401, detail="Invalid passcode")
         
+    _meeting_repo.add_participant(body.meeting_id, user["id"])
+
     return MeetingResponse(
         status="success",
         meeting_id=meeting["id"],
@@ -143,11 +146,16 @@ def finalize_meeting(
     user: dict = Depends(get_current_user)
 ):
     try:
+        # Mark the meeting as completed and set end_time
+        _meeting_repo.end_meeting(meeting_id)
+        
         captions = _transcription_service.get_captions(meeting_id)
         captions_dicts = [cap.model_dump() for cap in captions]
         result = _meeting_repo.finalize_transcript(meeting_id, captions_dicts)
         if not result:
-            raise HTTPException(status_code=404, detail="No captions found for this meeting to finalize.")
+            # We don't raise 404 here, we just return success with empty result
+            # because the meeting was still ended successfully.
+            return {"status": "success", "data": {"transcript_id": None, "utterance_count": 0}}
         
         return {"status": "success", "data": result}
     except ValueError:

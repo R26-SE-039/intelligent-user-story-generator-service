@@ -26,6 +26,30 @@ class MeetingRepository:
         )
         return results[0] if results else None
 
+    def end_meeting(self, meeting_id: str) -> None:
+        self._gateway.update(
+            self._gateway.settings.meetings_table,
+            {"end_time": utc_now(), "status": "completed"},
+            eq={"id": meeting_id}
+        )
+
+    def add_participant(self, meeting_id: str, user_id: str) -> None:
+        table_name = getattr(self._gateway.settings, "meeting_participants_table", "meeting_participants")
+        existing = self._gateway.select(
+            table_name,
+            eq={"meeting_id": meeting_id, "user_id": user_id}
+        )
+        if not existing:
+            self._gateway.insert(
+                table_name,
+                {
+                    "id": str(uuid4()),
+                    "meeting_id": meeting_id,
+                    "user_id": user_id,
+                    "joined_at": utc_now(),
+                }
+            )
+
     def save_chat(self, meeting_id: str, sender_id: str, text: str) -> None:
         self._gateway.insert(
             self._gateway.settings.chat_messages_table,
