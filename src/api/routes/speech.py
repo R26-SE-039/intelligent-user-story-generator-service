@@ -345,13 +345,9 @@ async def websocket_endpoint(
                                 # ── Conflict Detection ──────────────────────────────────────────
                                 all_conflicts = []
                                 for req in requirements:
-                                    emb = req_embeddings.get(req.requirement_id, [])
-                                    if not emb:
-                                        continue
                                     detected = await asyncio.to_thread(
                                         _conflict_detector.detect,
                                         req,
-                                        emb,
                                         _req_repo,
                                     )
                                     if detected:

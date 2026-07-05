@@ -94,11 +94,13 @@ class RequirementRepository:
         )
 
     def find_similar_by_embedding(
-        self, embedding: list[float], meeting_id: str, top_k: int = 5, exclude_id: str | None = None
+        self, embedding: list[float], meeting_id: str, top_k: int = 10, exclude_id: str | None = None
     ) -> list[dict]:
         """
         Use pgvector cosine similarity (<=> operator) to find the most semantically
-        similar active requirements in the same meeting.
+        similar requirements in the same meeting — regardless of status.
+        This ensures every new requirement is checked against ALL prior ones
+        (active AND conflicted) so no conflict pair is missed.
         Returns rows with id, requirement_text, requirement_type, status, distance.
         """
         req_table = self._gateway.settings.requirements_table
@@ -113,12 +115,15 @@ class RequirementRepository:
             params.append(exclude_id)
         params.append(top_k)
         
+        # NOTE: No status filter — we check the new requirement against ALL
+        # previous requirements in the meeting (active, conflicted, etc.).
+        # This prevents missing conflicts where one side was already flagged.
         query = f"""
             SELECT r."id", r."requirement_text", r."requirement_type", r."status",
                    (re."embedding" <=> %s::vector) AS distance
             FROM "{emb_table}" re
             JOIN "{req_table}" r ON r."id" = re."requirement_id"
-            WHERE r."meeting_id" = %s AND r."status" = 'active'
+            WHERE r."meeting_id" = %s
             {exclude_clause}
             ORDER BY distance ASC
             LIMIT %s;
@@ -128,5 +133,38 @@ class RequirementRepository:
         with self._gateway._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(query, tuple(params))
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, tuple(params))
                 return [dict(row) for row in cur.fetchall()]
 
+    def get_all_for_conflict_check(
+        self, meeting_id: str, exclude_id: str | None = None
+    ) -> list[dict]:
+        """
+        Fetch ALL requirements for a meeting (regardless of status) for LLM-based
+        conflict checking. Excludes the new requirement itself by ID.
+
+        This bypasses the embedding-based pre-filter entirely, which is necessary
+        when using hash-based fallback embeddings that have no semantic meaning.
+        """
+        req_table = self._gateway.settings.requirements_table
+
+        exclude_clause = ""
+        params: list = [meeting_id]
+        if exclude_id:
+            exclude_clause = 'AND "id" != %s'
+            params.append(exclude_id)
+
+        query = f"""
+            SELECT "id", "requirement_text", "requirement_type", "status"
+            FROM "{req_table}"
+            WHERE "meeting_id" = %s
+            {exclude_clause}
+            ORDER BY "created_at" ASC;
+        """
+
+        from psycopg2.extras import RealDictCursor
+        with self._gateway._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, tuple(params))
+                return [dict(row) for row in cur.fetchall()]
