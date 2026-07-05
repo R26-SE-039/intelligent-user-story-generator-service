@@ -47,6 +47,7 @@ class SpeechServiceSettings:
     auth_secret: str
     azure_speech_key: str
     azure_speech_region: str
+    frontend_base_url: str
 
 
 class Settings(BaseSettings):
@@ -92,6 +93,9 @@ class Settings(BaseSettings):
 
     # Auth
     auth_secret: str = Field(default="dev-change-me-secret", alias="AUTH_SECRET")
+
+    # Frontend base URL (used for invite links)
+    frontend_base_url: str = Field(default="http://localhost:5173", alias="FRONTEND_BASE_URL")
 
     # Speech transcription tuning
     transcription_timeout_seconds: int = Field(default=120, alias="TRANSCRIPTION_TIMEOUT_SECONDS")
@@ -147,4 +151,5 @@ def load_speech_settings() -> SpeechServiceSettings:
         auth_secret=s.auth_secret.strip(),
         azure_speech_key=s.azure_speech_key.strip(),
         azure_speech_region=s.azure_speech_region.strip(),
+        frontend_base_url=s.frontend_base_url.strip(),
     )

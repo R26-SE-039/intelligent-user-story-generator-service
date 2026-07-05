@@ -21,7 +21,9 @@ class TranscriptionService:
         self._sessions: dict[str, list[CaptionLine]] = {}
         self._participants: dict[str, dict[str, str]] = {}  # meeting_id -> {conn_id: name}
         self._connections: dict[str, list[Any]] = {}  # meeting_id -> [websocket_objs]
+        self._connections: dict[str, list[Any]] = {}  # meeting_id -> [websocket_objs]
         self._passcodes: dict[str, str] = {} # meeting_id -> passcode
+        self._mappings: dict[str, list[dict[str, str]]] = {} # meeting_id -> list of mappings
         self._lock = Lock()
 
     def register_passcode(self, meeting_id: str, passcode: str) -> None:
@@ -42,6 +44,8 @@ class TranscriptionService:
         with self._lock:
             if session_id in self._sessions:
                 self._sessions.pop(session_id)
+            if session_id in self._mappings:
+                self._mappings.pop(session_id)
 
     def push_caption(self, session_id: str, speaker: str, text: str) -> CaptionLine:
         with self._lock:
@@ -49,7 +53,7 @@ class TranscriptionService:
                 raise ValueError("Session not found")
 
             caption = CaptionLine(
-                id=f"cap-{uuid4()}",
+                id=str(uuid4()),
                 speaker=speaker,
                 text=text,
                 created_at=utc_now(),
@@ -63,6 +67,16 @@ class TranscriptionService:
             if captions is None:
                 raise ValueError("Session not found")
             return list(captions)
+            
+    def add_requirement_mappings(self, meeting_id: str, mappings: list[dict[str, str]]) -> None:
+        with self._lock:
+            if meeting_id not in self._mappings:
+                self._mappings[meeting_id] = []
+            self._mappings[meeting_id].extend(mappings)
+            
+    def get_requirement_mappings(self, meeting_id: str) -> list[dict[str, str]]:
+        with self._lock:
+            return list(self._mappings.get(meeting_id, []))
 
     def add_participant(self, meeting_id: str, conn_id: str, name: str, websocket: Any):
         with self._lock:

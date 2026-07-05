@@ -22,6 +22,10 @@ from src.utils.helpers import utc_now
 from src.services.speech.transcription_service import TranscriptionService
 from src.services.speech.azure_client import AzureSpeechClient
 from src.repositories.meeting_repository import MeetingRepository
+from src.repositories.requirement_repository import RequirementRepository
+from src.repositories.conflict_repository import ConflictRepository
+from src.services.requirement.requirement_extractor import RequirementExtractorService
+from src.services.conflict.conflict_detector import ConflictDetectorService
 from src.db.postgres import PostgresGateway
 from src.core.config import load_speech_settings
 
@@ -32,7 +36,11 @@ _settings = load_speech_settings()
 _gateway = PostgresGateway.from_env()
 _azure_speech = AzureSpeechClient(_settings)
 _meeting_repo = MeetingRepository(_gateway)
+_req_repo = RequirementRepository(_gateway)
+_conflict_repo = ConflictRepository(_gateway)
 _transcription_service = TranscriptionService()
+_req_extractor = RequirementExtractorService()
+_conflict_detector = ConflictDetectorService()
 
 
 @router.get("/health")
@@ -62,7 +70,7 @@ def create_meeting(
     _transcription_service.register_passcode(meeting_id, passcode)
     
     # In a real app, this link would point to your frontend domain
-    invite_link = f"http://localhost:5173/login?meetingId={meeting_id}&passcode={passcode}"
+    invite_link = f"{_settings.frontend_base_url}/login?meetingId={meeting_id}&passcode={passcode}"
     
     return MeetingResponse(
         status="success",
@@ -93,7 +101,7 @@ def join_meeting(
         meeting_id=meeting["id"],
         project_id=meeting.get("project_id"),
         passcode=body.passcode,
-        invite_link=f"http://localhost:5173/login?meetingId={meeting['id']}&passcode={body.passcode}",
+        invite_link=f"{_settings.frontend_base_url}/login?meetingId={meeting['id']}&passcode={body.passcode}",
         name=meeting["title"]
     )
 
@@ -151,7 +159,9 @@ def finalize_meeting(
         
         captions = _transcription_service.get_captions(meeting_id)
         captions_dicts = [cap.model_dump() for cap in captions]
-        result = _meeting_repo.finalize_transcript(meeting_id, captions_dicts)
+        mappings = _transcription_service.get_requirement_mappings(meeting_id)
+        
+        result = _meeting_repo.finalize_transcript(meeting_id, captions_dicts, mappings)
         if not result:
             # We don't raise 404 here, we just return success with empty result
             # because the meeting was still ended successfully.
@@ -188,9 +198,12 @@ async def websocket_endpoint(
     # Queue for thread-safe communication from Azure callback to this async loop
     result_queue = asyncio.Queue()
 
-    # Azure Speech Real-time Integration
+    # Initialize to None — set inside try block if Azure init succeeds
+    recognizer = None
+    push_stream = None
     try:
         speech_config = _azure_speech.get_speech_config()
+        speech_config.speech_recognition_language = "en-US" # Explicitly set language
         push_stream = _azure_speech.create_push_stream()
         audio_config = speechsdk.audio.AudioConfig(stream=push_stream)
         
@@ -204,6 +217,7 @@ async def websocket_endpoint(
                 text = evt.result.text
                 if not text: return
                 
+                print(f"[Azure] ✅ Final result from {speaker_label}: {text!r}")
                 broadcast_data = {
                     "type": "transcription",
                     "data": {
@@ -215,11 +229,17 @@ async def websocket_endpoint(
                     }
                 }
                 
-                # Schedule broadcast and persistence
+                # Only enqueue for broadcast — push_caption runs in queue_worker
+                # (asyncio loop) to avoid cross-thread lock contention.
                 loop.call_soon_threadsafe(result_queue.put_nowait, broadcast_data)
-                _transcription_service.push_caption(meeting_id, speaker_label, text)
+            elif evt.result.reason == speechsdk.ResultReason.NoMatch:
+                print(f"[Azure] ⚠️ NoMatch (could not recognize speech, possibly wrong language or just noise)")
+            else:
+                print(f"[Azure] ⚠️ Recognition reason: {evt.result.reason}")
 
         def handle_partial_result(evt):
+            if evt.result.text:
+                print(f"[Azure] 🔄 Partial from {speaker_label}: {evt.result.text!r}")
             broadcast_data = {
                 "type": "transcription",
                 "data": {
@@ -231,13 +251,21 @@ async def websocket_endpoint(
             }
             loop.call_soon_threadsafe(result_queue.put_nowait, broadcast_data)
 
+        def handle_canceled(evt):
+            print(f"[Azure] ❌ Canceled: {evt.reason}")
+            if evt.reason == speechsdk.CancellationReason.Error:
+                print(f"[Azure] ❌ Error details: {evt.error_details}")
+
         recognizer.recognized.connect(handle_final_result)
         recognizer.recognizing.connect(handle_partial_result)
-        recognizer.start_continuous_recognition_async()
+        recognizer.canceled.connect(handle_canceled)
+        recognizer.start_continuous_recognition_async().get()
+        print(f"[Azure] 🎙️ Recognizer started for {speaker_label} in meeting {meeting_id}")
         
     except Exception as e:
         print(f"[Azure] ❌ Transcription Service Error: {e}")
         recognizer = None
+        push_stream = None
 
     # Background task to process the queue and broadcast to all clients
     async def queue_worker():
@@ -248,6 +276,109 @@ async def websocket_endpoint(
                 for conn in _transcription_service.get_connections(meeting_id):
                     try: await conn.send_json(data)
                     except: pass
+                # Persist final captions here — safe, runs in asyncio loop, not Azure thread
+                # This avoids cross-thread _lock contention that deadlocks the Azure callback.
+                if data.get("type") == "transcription" and data.get("data", {}).get("is_final"):
+                    try:
+                        caption = _transcription_service.push_caption(
+                            meeting_id,
+                            data["data"]["speaker_name"],
+                            data["data"]["text"]
+                        )
+                        
+                        # Background task to extract requirements from this utterance
+                        async def extract_and_store(utterance_text: str, caption_id: str):
+                            try:
+                                # Run extraction in thread pool
+                                requirements = await asyncio.to_thread(
+                                    _req_extractor.extract, utterance_text, meeting_id
+                                )
+                                if not requirements:
+                                    return
+                                    
+                                # Save requirements to DB
+                                await asyncio.to_thread(_req_repo.save, requirements)
+                                
+                                # Generate embeddings
+                                embeddings_data = []
+                                mappings = []
+                                req_embeddings: dict[str, list[float]] = {}
+                                for req in requirements:
+                                    emb = await asyncio.to_thread(_req_extractor.get_embedding, req.requirement_text)
+                                    embeddings_data.append({
+                                        "requirement_id": req.requirement_id,
+                                        "embedding": emb
+                                    })
+                                    req_embeddings[req.requirement_id] = emb
+                                    mappings.append({
+                                        "requirement_id": req.requirement_id,
+                                        "utterance_id": caption_id
+                                    })
+                                    
+                                # Save embeddings to DB
+                                await asyncio.to_thread(_req_repo.save_embeddings, embeddings_data)
+                                
+                                # Save mappings in memory until finalize_transcript
+                                _transcription_service.add_requirement_mappings(meeting_id, mappings)
+                                
+                                # Broadcast extracted requirements to clients
+                                req_payload = {
+                                    "type": "requirements",
+                                    "data": [r.model_dump() for r in requirements]
+                                }
+                                for c in _transcription_service.get_connections(meeting_id):
+                                    try: await c.send_json(req_payload)
+                                    except: pass
+                                    
+                                print(f"[Requirements] Extracted {len(requirements)} requirements from utterance.")
+                                
+                                # ── Conflict Detection ──────────────────────────────────────────
+                                all_conflicts = []
+                                for req in requirements:
+                                    emb = req_embeddings.get(req.requirement_id, [])
+                                    if not emb:
+                                        continue
+                                    detected = await asyncio.to_thread(
+                                        _conflict_detector.detect,
+                                        req,
+                                        emb,
+                                        _req_repo,
+                                    )
+                                    if detected:
+                                        all_conflicts.extend(detected)
+                                        # Mark the new requirement as conflicted
+                                        await asyncio.to_thread(
+                                            _req_repo.update_status, req.requirement_id, "conflicted"
+                                        )
+                                        # Mark each existing conflicting requirement accordingly
+                                        for conflict in detected:
+                                            other_id = conflict.requirement_b_id
+                                            # Only mark the other req as conflicted if it isn't already
+                                            await asyncio.to_thread(
+                                                _req_repo.update_status, other_id, "conflicted"
+                                            )
+                                
+                                if all_conflicts:
+                                    await asyncio.to_thread(_conflict_repo.save, all_conflicts)
+                                    
+                                    conflict_payload = {
+                                        "type": "conflicts",
+                                        "data": [c.model_dump() for c in all_conflicts]
+                                    }
+                                    for c in _transcription_service.get_connections(meeting_id):
+                                        try: await c.send_json(conflict_payload)
+                                        except: pass
+                                    
+                                    print(f"[Conflicts] {len(all_conflicts)} conflict(s) detected and saved.")
+                                
+                            except Exception as ex:
+                                print(f"[Requirements] Error during extraction: {ex}")
+                                
+                        # Fire and forget the extraction task
+                        asyncio.create_task(extract_and_store(data["data"]["text"], caption.id))
+                        
+                    except ValueError:
+                        pass  # Session already cleaned up — safe to ignore
                 result_queue.task_done()
         except asyncio.CancelledError:
             pass
@@ -255,15 +386,35 @@ async def websocket_endpoint(
     worker_task = asyncio.create_task(queue_worker())
 
     # Main WebSocket Loop
+    bytes_received = 0
     try:
         while True:
             msg = await websocket.receive()
             
-            if "bytes" in msg:
-                if recognizer:
+            if msg.get("type") == "websocket.disconnect":
+                break
+            
+            if msg.get("bytes") is not None:
+                if recognizer and push_stream:
+                    if bytes_received == 0:
+                        print(f"[WS] 📡 FIRST audio chunk received from {speaker_label} ({len(msg['bytes'])} bytes)")
+                    
                     push_stream.write(msg["bytes"])
+                    
+                    # Save a debug copy of the audio to disk to verify it's not silent
+                    with open("debug_audio.pcm", "ab") as f:
+                        f.write(msg["bytes"])
+
+                    bytes_received += len(msg["bytes"])
+                    
+                    if bytes_received % 320000 < len(msg["bytes"]):  # print ~every 10 seconds of 16kHz audio
+                        # Calculate rough volume peak to check for silence
+                        import struct
+                        shorts = struct.unpack(f"{len(msg['bytes'])//2}h", msg["bytes"])
+                        max_vol = max(abs(s) for s in shorts) if shorts else 0
+                        print(f"[WS] 📡 Audio received from {speaker_label}: {bytes_received} total bytes. Peak volume: {max_vol}")
                 
-            elif "text" in msg:
+            elif msg.get("text") is not None:
                 data = json.loads(msg["text"])
                 if data.get("type") == "chat":
                     text = data.get("text", "")
@@ -288,8 +439,9 @@ async def websocket_endpoint(
         # Cleanup
         worker_task.cancel()
         if recognizer:
-            try: 
-                recognizer.stop_continuous_recognition_async()
+            try:
+                stop_future = recognizer.stop_continuous_recognition_async()
+                stop_future.get()   # Block until Azure flushes all buffered audio
                 push_stream.close()
             except: pass
         
@@ -302,7 +454,8 @@ async def websocket_endpoint(
             try:
                 captions = _transcription_service.get_captions(meeting_id)
                 captions_dicts = [cap.model_dump() for cap in captions]
-                _meeting_repo.finalize_transcript(meeting_id, captions_dicts)
+                mappings = _transcription_service.get_requirement_mappings(meeting_id)
+                _meeting_repo.finalize_transcript(meeting_id, captions_dicts, mappings)
             except ValueError:
                 pass # Session not found
         else:

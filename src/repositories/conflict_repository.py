@@ -27,3 +27,21 @@ class ConflictRepository:
                 }
             )
         self._gateway.upsert(self._gateway.settings.conflicts_table, rows, on_conflict="id")
+
+    def get_by_meeting(self, meeting_id: str) -> list[dict]:
+        """Fetch all conflicts involving requirements from a meeting."""
+        conflicts_table = self._gateway.settings.conflicts_table
+        req_table = self._gateway.settings.requirements_table
+        
+        query = f"""
+            SELECT c.*
+            FROM "{conflicts_table}" c
+            JOIN "{req_table}" r ON r."id" = c."requirement_a_id"
+            WHERE r."meeting_id" = %s
+        """
+        from psycopg2.extras import RealDictCursor
+        with self._gateway._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, (meeting_id,))
+                return [dict(row) for row in cur.fetchall()]
+

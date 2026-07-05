@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
-from openai import OpenAI
-
+from src.core.config import Settings
+from src.core.llm import get_llm_client
 from src.models.transcript import Chunk
 from src.models.user_story import GeneratedStory, StoryBatch
 
@@ -14,11 +15,16 @@ from src.models.user_story import GeneratedStory, StoryBatch
 class StoryGenerator:
     """Generate user stories using an LLM with deterministic fallback for local runs."""
 
-    def __init__(self, api_key: str | None, model_name: str, api_base: str = "https://openrouter.io/api/v1") -> None:
-        self.api_key = api_key
-        self.model_name = model_name
-        self.api_base = api_base
-        self.client = OpenAI(api_key=api_key, base_url=api_base) if api_key else None
+    def __init__(self, api_key: str | None = None, api_base: str | None = None, model: str = "gpt-4o-mini") -> None:
+        """Initialize StoryGenerator with an LLM client."""
+        settings = Settings()
+        if api_key:
+            settings.llm_api_key = api_key
+        if api_base:
+            settings.llm_api_base = api_base
+        
+        self.client = get_llm_client(settings)
+        self.model = model
         # Prompts are in src/prompts/
         self.prompts_dir = Path(__file__).resolve().parent.parent.parent / "prompts"
 
@@ -45,7 +51,7 @@ class StoryGenerator:
         system_prompt = self._load_prompt("system_guardrail_prompt.txt")
         story_prompt = self._load_prompt("story_generation_prompt.txt")
         completion = self.client.chat.completions.create(
-            model=self.model_name,
+            model=self.model,
             temperature=0.2,
             messages=[
                 {"role": "system", "content": system_prompt},
