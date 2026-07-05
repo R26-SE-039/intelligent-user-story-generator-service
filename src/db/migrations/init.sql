@@ -47,6 +47,7 @@ CREATE TABLE transcript_utterances (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     transcript_id UUID REFERENCES transcripts(id) ON DELETE CASCADE,
     speaker_id UUID,
+    speaker_name TEXT,
     start_time NUMERIC,
     end_time NUMERIC,
     utterance_text TEXT,

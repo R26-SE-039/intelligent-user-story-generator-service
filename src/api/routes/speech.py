@@ -218,6 +218,11 @@ async def websocket_endpoint(
                 if not text: return
                 
                 print(f"[Azure] ✅ Final result from {speaker_label}: {text!r}")
+                
+                start_time = evt.result.offset / 10000000 if hasattr(evt.result, "offset") else None
+                duration = evt.result.duration / 10000000 if hasattr(evt.result, "duration") else None
+                end_time = (start_time + duration) if start_time is not None and duration is not None else None
+
                 broadcast_data = {
                     "type": "transcription",
                     "data": {
@@ -225,7 +230,9 @@ async def websocket_endpoint(
                         "speaker_id": conn_id,
                         "speaker_name": speaker_label,
                         "is_final": True,
-                        "timestamp": utc_now()
+                        "timestamp": utc_now(),
+                        "timestamp_start": start_time,
+                        "timestamp_end": end_time
                     }
                 }
                 
@@ -283,7 +290,10 @@ async def websocket_endpoint(
                         caption = _transcription_service.push_caption(
                             meeting_id,
                             data["data"]["speaker_name"],
-                            data["data"]["text"]
+                            data["data"]["text"],
+                            speaker_id=data["data"].get("speaker_id"),
+                            timestamp_start=data["data"].get("timestamp_start"),
+                            timestamp_end=data["data"].get("timestamp_end")
                         )
                         
                         # Background task to extract requirements from this utterance

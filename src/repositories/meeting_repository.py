@@ -90,7 +90,7 @@ class MeetingRepository:
             utterance_rows.append({
                 "id": cap.get("id") or str(uuid4()),
                 "transcript_id": transcript_id,
-                # CaptionLine.model_dump() has key "speaker" (name string), not "speaker_id"
+                "speaker_id": cap.get("speaker_id"),
                 "speaker_name": cap.get("speaker", ""),
                 "utterance_text": cap.get("text", ""),
                 "start_time": cap.get("timestamp_start"),

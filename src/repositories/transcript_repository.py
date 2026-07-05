@@ -32,6 +32,7 @@ class TranscriptRepository:
                     "id": str(uuid4()), # We generate a UUID for the utterance
                     "transcript_id": transcript.transcript_id,
                     "speaker_id": item.speaker_id,
+                    "speaker_name": item.speaker,
                     "utterance_text": item.text,
                     "start_time": item.timestamp_start,
                     "end_time": item.timestamp_end,

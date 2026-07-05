@@ -47,7 +47,7 @@ class TranscriptionService:
             if session_id in self._mappings:
                 self._mappings.pop(session_id)
 
-    def push_caption(self, session_id: str, speaker: str, text: str) -> CaptionLine:
+    def push_caption(self, session_id: str, speaker: str, text: str, speaker_id: str | None = None, timestamp_start: float | None = None, timestamp_end: float | None = None) -> CaptionLine:
         with self._lock:
             if session_id not in self._sessions:
                 raise ValueError("Session not found")
@@ -55,7 +55,10 @@ class TranscriptionService:
             caption = CaptionLine(
                 id=str(uuid4()),
                 speaker=speaker,
+                speaker_id=speaker_id,
                 text=text,
+                timestamp_start=timestamp_start,
+                timestamp_end=timestamp_end,
                 created_at=utc_now(),
             )
             self._sessions[session_id].append(caption)

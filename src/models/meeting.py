@@ -7,7 +7,10 @@ class CaptionLine(BaseModel):
     """Normalized caption line returned by the service."""
     id: str
     speaker: str
+    speaker_id: str | None = None
     text: str
+    timestamp_start: float | None = None
+    timestamp_end: float | None = None
     created_at: str
 
 class MeetingCreateRequest(BaseModel):
