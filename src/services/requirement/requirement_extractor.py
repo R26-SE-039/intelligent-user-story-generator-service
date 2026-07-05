@@ -1,6 +1,7 @@
 """Requirement Extractor Service."""
 
 import json
+import traceback
 from uuid import uuid4
 from pathlib import Path
 
@@ -69,10 +70,12 @@ class RequirementExtractorService:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": utterance_text}
                 ],
-                temperature=0.1
+                temperature=0.1,
+                max_tokens=1500
             )
             
             content = response.choices[0].message.content.strip()
+            print(f"[RequirementExtractor] LLM Response: {content}")
             
             # Clean up potential markdown formatting
             if content.startswith("```json"):
@@ -103,4 +106,5 @@ class RequirementExtractorService:
             
         except Exception as e:
             print(f"[RequirementExtractor] Error extracting requirements: {e}")
+            traceback.print_exc()
             return []
