@@ -71,7 +71,7 @@ class RequirementExtractorService:
                     {"role": "user", "content": utterance_text}
                 ],
                 temperature=0.1,
-                max_tokens=1500
+                max_tokens=300
             )
             
             content = response.choices[0].message.content.strip()

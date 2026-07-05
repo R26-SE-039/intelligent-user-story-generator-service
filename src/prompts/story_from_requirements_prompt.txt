@@ -1,0 +1,20 @@
+Translate the provided list of Requirements into Agile User Stories.
+Format: "As a [User Role], I want [Feature] so that [Value/Benefit]."
+
+Return ONLY a JSON object:
+{
+  "stories": [
+    {
+      "story_id": "US-001",
+      "title": "Short title",
+      "story": "As a... I want... so that...",
+      "acceptance_criteria": ["Given... When... Then..."],
+      "priority": "Must"|"Should"|"Could",
+      "confidence": 0.95,
+      "status": "ready",
+      "clarification_questions": [],
+      "evidence_refs": ["req-uuid-1"]
+    }
+  ]
+}
+Each story MUST list the exact requirement ID it satisfies in "evidence_refs". No markdown, return raw JSON.

@@ -15,7 +15,7 @@ from src.models.requirement import Requirement
 
 # Maximum number of existing requirements to send to the LLM in one call.
 # Prevents the context window from becoming too large.
-MAX_CANDIDATES = 20
+MAX_CANDIDATES = 5
 
 
 class ConflictDetectorService:
@@ -73,7 +73,7 @@ class ConflictDetectorService:
                     {"role": "user", "content": user_message},
                 ],
                 temperature=0.0,   # Deterministic for classification tasks
-                max_tokens=1500,   # Prevent 402 from OpenRouter credit limit assumption
+                max_tokens=300,   # Prevent 402 from OpenRouter credit limit assumption
             )
 
             content = response.choices[0].message.content.strip()

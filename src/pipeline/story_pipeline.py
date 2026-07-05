@@ -47,7 +47,11 @@ class StoryPipeline:
         
         self.retriever = Retriever(self.chroma_service)
         self.transcription_service = TranscriptionService()
-        self.story_generator = StoryGenerator(settings.llm_api_key, settings.chat_model, settings.llm_api_base)
+        self.story_generator = StoryGenerator(
+            api_key=settings.llm_api_key,
+            api_base=settings.llm_api_base,
+            model=settings.chat_model
+        )
 
     @classmethod
     def from_env(cls) -> "StoryPipeline":

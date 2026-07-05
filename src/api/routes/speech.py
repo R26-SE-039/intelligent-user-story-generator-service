@@ -171,6 +171,114 @@ def finalize_meeting(
     except ValueError:
         raise HTTPException(status_code=404, detail="Session not found")
 
+
+@router.get("/meeting/{meeting_id}/requirements")
+def get_meeting_requirements(
+    meeting_id: str,
+    user: dict = Depends(get_current_user)
+):
+    try:
+        # Fetch all requirements (active, conflicted, discarded, etc.) for review
+        requirements = _req_repo.get_all_for_conflict_check(meeting_id)
+        return {"status": "success", "requirements": requirements}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/meeting/{meeting_id}/conflicts")
+def get_meeting_conflicts(
+    meeting_id: str,
+    user: dict = Depends(get_current_user)
+):
+    try:
+        conflicts = _conflict_repo.get_by_meeting(meeting_id)
+        return {"status": "success", "conflicts": conflicts}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+from pydantic import BaseModel
+
+class ResolutionItem(BaseModel):
+    conflict_id: str
+    resolution_type: str  # 'keep_a' | 'keep_b' | 'merge' | 'dismiss'
+    merged_text: str | None = None
+
+class EditedRequirementItem(BaseModel):
+    requirement_id: str
+    text: str
+
+class FinalizeRequirementsRequest(BaseModel):
+    resolutions: list[ResolutionItem]
+    edited_requirements: list[EditedRequirementItem]
+
+
+@router.post("/meeting/{meeting_id}/requirements/finalize")
+def finalize_requirements(
+    meeting_id: str,
+    body: FinalizeRequirementsRequest,
+    user: dict = Depends(get_current_user)
+):
+    try:
+        # 1. Update any inline edited requirements
+        for item in body.edited_requirements:
+            _req_repo.update_status(item.requirement_id, "active")  # Reset/ensure active
+            _gateway.update(
+                _gateway.settings.requirements_table,
+                {"requirement_text": item.text},
+                eq={"id": item.requirement_id}
+            )
+
+        # 2. Process active resolutions
+        conflicts = _conflict_repo.get_by_meeting(meeting_id)
+        conflict_map = {c["id"]: c for c in conflicts}
+
+        for res in body.resolutions:
+            conflict = conflict_map.get(res.conflict_id)
+            if not conflict:
+                continue
+
+            req_a_id = conflict["requirement_a_id"]
+            req_b_id = conflict["requirement_b_id"]
+
+            if res.resolution_type == "keep_a":
+                _req_repo.update_status(req_a_id, "active")
+                _req_repo.update_status(req_b_id, "discarded")
+            elif res.resolution_type == "keep_b":
+                _req_repo.update_status(req_a_id, "discarded")
+                _req_repo.update_status(req_b_id, "active")
+            elif res.resolution_type == "merge":
+                _req_repo.update_status(req_a_id, "resolved_merged")
+                _req_repo.update_status(req_b_id, "resolved_merged")
+                # Save new merged requirement
+                from src.models.requirement import Requirement
+                import uuid
+                merged_req = Requirement(
+                    requirement_id=str(uuid.uuid4()),
+                    meeting_id=meeting_id,
+                    requirement_text=res.merged_text or "Merged Requirement",
+                    requirement_type="functional",
+                    status="active"
+                )
+                _req_repo.save([merged_req])
+            elif res.resolution_type == "dismiss":
+                _req_repo.update_status(req_a_id, "active")
+                _req_repo.update_status(req_b_id, "active")
+
+            # Remove resolved conflict entry
+            _gateway.delete(_gateway.settings.conflicts_table, eq={"id": res.conflict_id})
+
+        # 3. Clean up any remaining conflicted requirements that weren't addressed
+        remaining = _req_repo.get_all_for_conflict_check(meeting_id)
+        for req in remaining:
+            if req["status"] == "conflicted":
+                _req_repo.update_status(req["id"], "active")
+
+        return {"status": "success", "message": "Requirements finalized successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.websocket("/ws/{meeting_id}")
 async def websocket_endpoint(
     websocket: WebSocket,

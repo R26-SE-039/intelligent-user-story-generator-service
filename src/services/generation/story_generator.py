@@ -99,3 +99,44 @@ class StoryGenerator:
         if self.client is None:
             return self._generate_fallback(query, evidence)
         return self._generate_with_openai(query, evidence)
+
+    def generate_from_requirements(self, requirements: list[dict]) -> StoryBatch:
+        """Generate stories directly from finalized requirements list."""
+        if self.client is None or not requirements:
+            return StoryBatch(stories=[])
+            
+        system_prompt = self._load_prompt("system_guardrail_prompt.txt")
+        story_prompt = self._load_prompt("story_from_requirements_prompt.txt")
+        
+        # Build requirements payload
+        payload = {
+            "requirements": [
+                {
+                    "id": req["id"],
+                    "text": req["requirement_text"],
+                    "type": req["requirement_type"]
+                }
+                for req in requirements
+            ]
+        }
+        
+        completion = self.client.chat.completions.create(
+            model=self.model,
+            temperature=0.2,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": story_prompt},
+                {"role": "user", "content": json.dumps(payload, ensure_ascii=True)},
+            ],
+            max_tokens=1200,
+        )
+        content = completion.choices[0].message.content or "{}"
+        if "```" in content:
+            import re
+            match = re.search(r"```(?:json)?\s*([\s\S]*?)```", content)
+            content = match.group(1).strip() if match else content
+        data = json.loads(content)
+        if isinstance(data, list):
+            data = {"stories": data}
+        return StoryBatch.model_validate(data)
+

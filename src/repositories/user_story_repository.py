@@ -46,4 +46,18 @@ class UserStoryRepository:
     def save_requirement_mappings(self, mappings: list[dict[str, str]]) -> None:
         if not mappings:
             return
-        self._gateway.upsert(self._gateway.settings.user_story_requirement_mapping_table, mappings, on_conflict="user_story_id")
+        table = self._gateway.settings.user_story_requirement_mapping_table
+        columns = list(mappings[0].keys())
+        values_list = []
+        for m in mappings:
+            values_list.append(tuple(self._gateway._format_value(m.get(c)) for c in columns))
+            
+        col_str = ", ".join([f'"{c}"' for c in columns])
+        query = f'INSERT INTO "{table}" ({col_str}) VALUES %s ON CONFLICT DO NOTHING'
+        
+        from psycopg2.extras import execute_values
+        with self._gateway._get_connection() as conn:
+            with conn.cursor() as cur:
+                execute_values(cur, query, values_list)
+            conn.commit()
+
