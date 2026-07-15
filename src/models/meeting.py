@@ -12,6 +12,7 @@ class CaptionLine(BaseModel):
     timestamp_start: float | None = None
     timestamp_end: float | None = None
     created_at: str
+    utterance_type: str | None = None
 
 class MeetingCreateRequest(BaseModel):
     name: str = Field(min_length=1)

@@ -16,6 +16,8 @@ from src.services.retrieval.chroma_service import ChromaService
 from src.services.retrieval.retriever import Retriever
 from src.services.generation.story_generator import StoryGenerator
 from src.services.generation.story_validator import validate_stories
+from src.services.requirement.utterance_classifier import UtteranceClassifier
+from src.services.requirement.context_builder import ContextBuilder
 
 from src.models.schemas import (
     GenerateStoriesRequest,
@@ -52,6 +54,10 @@ class StoryPipeline:
             api_base=settings.llm_api_base,
             model=settings.chat_model
         )
+
+        # ModernBERT utterance classifier — loaded once as a singleton
+        self.utterance_classifier = UtteranceClassifier()
+        self.context_builder = ContextBuilder()
 
     @classmethod
     def from_env(cls) -> "StoryPipeline":
@@ -115,9 +121,33 @@ class StoryPipeline:
         return self._generate_stories(request)
 
     def run(self, request: PipelineRunRequest) -> PipelineRunResponse:
-        """Run index + retrieve + generate in a single operation with phase tracking."""
+        """Run classify + index + retrieve + generate in a single operation."""
         LOGGER.info("--- Starting Pipeline Run for transcript_id=%s ---", request.transcript.transcript_id)
-        
+
+        # Phase 0: ModernBERT Utterance Classification
+        LOGGER.info("[Phase 0/4] Running ModernBERT utterance classification...")
+        utterance_objs = getattr(request.transcript, "utterances", [])
+        utterances = [u.text for u in utterance_objs if hasattr(u, "text")]
+        if utterances:
+            context_texts = self.context_builder.build_all(utterances)
+            classifications = self.utterance_classifier.classify_batch(context_texts)
+            for i, result in enumerate(classifications):
+                if i < len(utterance_objs):
+                    utterance_objs[i].utterance_type = result.label
+            requirement_indices = [
+                i for i, result in enumerate(classifications)
+                if result.is_requirement
+            ]
+            total = len(utterances)
+            found = len(requirement_indices)
+            LOGGER.info(
+                "[Phase 0/4] Classification complete: %d/%d utterances identified as Requirements.",
+                found,
+                total,
+            )
+        else:
+            LOGGER.info("[Phase 0/4] No structured utterances found, skipping classification.")
+
         # Phase 1: Indexing
         LOGGER.info("[Phase 1/4] Chunking and Indexing transcript...")
         indexed_chunks = self.index_transcript(request.transcript)

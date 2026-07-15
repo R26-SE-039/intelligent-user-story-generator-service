@@ -64,6 +64,14 @@ class TranscriptionService:
             self._sessions[session_id].append(caption)
             return caption
 
+    def update_caption_type(self, session_id: str, caption_id: str, utterance_type: str) -> None:
+        with self._lock:
+            if session_id in self._sessions:
+                for caption in self._sessions[session_id]:
+                    if caption.id == caption_id:
+                        caption.utterance_type = utterance_type
+                        break
+
     def get_captions(self, session_id: str) -> list[CaptionLine]:
         with self._lock:
             captions = self._sessions.get(session_id)

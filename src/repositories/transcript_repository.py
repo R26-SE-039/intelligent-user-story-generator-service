@@ -36,7 +36,8 @@ class TranscriptRepository:
                     "utterance_text": item.text,
                     "start_time": item.timestamp_start,
                     "end_time": item.timestamp_end,
-                    "confidence_score": getattr(item, "confidence_score", None)
+                    "confidence_score": getattr(item, "confidence_score", None),
+                    "utterance_type": getattr(item, "utterance_type", None)
                 }
             )
 

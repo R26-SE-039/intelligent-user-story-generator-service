@@ -66,17 +66,17 @@ class ConflictDetectorService:
         )
 
         try:
-            response = self.client.chat.completions.create(
+            input_text = f"System Instructions:\n{system_prompt}\n\nTask:\n{user_message}"
+            interaction = self.client.interactions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
-                temperature=0.0,   # Deterministic for classification tasks
-                max_tokens=300,   # Prevent 402 from OpenRouter credit limit assumption
+                input=input_text,
+                response_format={
+                    "type": "text",
+                    "mime_type": "application/json"
+                }
             )
 
-            content = response.choices[0].message.content.strip()
+            content = interaction.output_text.strip()
             print(f"[ConflictDetector] LLM raw response: {content[:300]}")
 
             # Strip any accidental markdown fences

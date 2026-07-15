@@ -23,3 +23,5 @@ data/
 dist/
 build/
 *.egg-info/
+
+models/

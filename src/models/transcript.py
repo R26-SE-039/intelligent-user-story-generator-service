@@ -11,6 +11,7 @@ class Utterance(BaseModel):
     timestamp_start: float | None = None
     timestamp_end: float | None = None
     confidence_score: float | None = None
+    utterance_type: str | None = None
 
 class Transcript(BaseModel):
     """Transcript payload to ingest and index."""

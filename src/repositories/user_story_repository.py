@@ -19,6 +19,11 @@ class UserStoryRepository:
         ac_rows = []
         
         for story in stories:
+            try:
+                import uuid
+                uuid.UUID(story.story_id)
+            except ValueError:
+                story.story_id = str(uuid4())
             story_id = story.story_id
             story_rows.append(
                 {

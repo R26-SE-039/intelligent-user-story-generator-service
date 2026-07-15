@@ -1,8 +1,14 @@
 """Main application entrypoint."""
 
+import logging
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+)
 
 from src.api.routes.user_stories import router as user_stories_router
 from src.api.routes.speech import router as speech_router

@@ -47,19 +47,20 @@ class StoryGenerator:
         }
         return json.dumps(payload, ensure_ascii=True)
 
-    def _generate_with_openai(self, query: str, evidence: list[Chunk]) -> StoryBatch:
+    def _generate_with_genai(self, query: str, evidence: list[Chunk]) -> StoryBatch:
         system_prompt = self._load_prompt("system_guardrail_prompt.txt")
         story_prompt = self._load_prompt("story_generation_prompt.txt")
-        completion = self.client.chat.completions.create(
+        input_text = f"System Instructions:\n{system_prompt}\n\nTask:\n{story_prompt}\n\nInput Data:\n{self._build_input_payload(query, evidence)}"
+        
+        interaction = self.client.interactions.create(
             model=self.model,
-            temperature=0.2,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": story_prompt},
-                {"role": "user", "content": self._build_input_payload(query, evidence)},
-            ],
+            input=input_text,
+            response_format={
+                "type": "text",
+                "mime_type": "application/json"
+            }
         )
-        content = completion.choices[0].message.content or "{}"
+        content = interaction.output_text or "{}"
         # Extract JSON block if model wraps it in markdown code fences
         if "```" in content:
             import re
@@ -98,7 +99,7 @@ class StoryGenerator:
         """Generate stories from evidence chunks using configured LLM or fallback."""
         if self.client is None:
             return self._generate_fallback(query, evidence)
-        return self._generate_with_openai(query, evidence)
+        return self._generate_with_genai(query, evidence)
 
     def generate_from_requirements(self, requirements: list[dict]) -> StoryBatch:
         """Generate stories directly from finalized requirements list."""
@@ -120,17 +121,16 @@ class StoryGenerator:
             ]
         }
         
-        completion = self.client.chat.completions.create(
+        input_text = f"System Instructions:\n{system_prompt}\n\nTask:\n{story_prompt}\n\nInput Data:\n{json.dumps(payload, ensure_ascii=True)}"
+        interaction = self.client.interactions.create(
             model=self.model,
-            temperature=0.2,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": story_prompt},
-                {"role": "user", "content": json.dumps(payload, ensure_ascii=True)},
-            ],
-            max_tokens=1200,
+            input=input_text,
+            response_format={
+                "type": "text",
+                "mime_type": "application/json"
+            }
         )
-        content = completion.choices[0].message.content or "{}"
+        content = interaction.output_text or "{}"
         if "```" in content:
             import re
             match = re.search(r"```(?:json)?\s*([\s\S]*?)```", content)

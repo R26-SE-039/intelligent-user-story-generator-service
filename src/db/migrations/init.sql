@@ -51,7 +51,8 @@ CREATE TABLE transcript_utterances (
     start_time NUMERIC,
     end_time NUMERIC,
     utterance_text TEXT,
-    confidence_score NUMERIC
+    confidence_score NUMERIC,
+    utterance_type VARCHAR(100)
 );
 
 -- Table: REQUIREMENTS

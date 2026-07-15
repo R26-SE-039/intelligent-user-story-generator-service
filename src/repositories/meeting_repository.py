@@ -95,7 +95,8 @@ class MeetingRepository:
                 "utterance_text": cap.get("text", ""),
                 "start_time": cap.get("timestamp_start"),
                 "end_time": cap.get("timestamp_end"),
-                "confidence_score": cap.get("confidence", 1.0)
+                "confidence_score": cap.get("confidence", 1.0),
+                "utterance_type": cap.get("utterance_type")
             })
 
         if utterance_rows:

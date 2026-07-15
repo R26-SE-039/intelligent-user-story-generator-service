@@ -407,10 +407,22 @@ async def websocket_endpoint(
                         # Background task to extract requirements from this utterance
                         async def extract_and_store(utterance_text: str, caption_id: str):
                             try:
-                                # Run extraction in thread pool
-                                requirements = await asyncio.to_thread(
-                                    _req_extractor.extract, utterance_text, meeting_id
+                                # Get previous utterance for context
+                                captions = _transcription_service.get_captions(meeting_id)
+                                prev_text = captions[-2].text if len(captions) > 1 else ""
+
+                                # Run extraction and classification in thread pool
+                                requirements, label = await asyncio.to_thread(
+                                    _req_extractor.extract,
+                                    utterance_text,
+                                    meeting_id,
+                                    previous_utterance=prev_text,
+                                    next_utterance=""
                                 )
+
+                                # Update caption type in transcription service
+                                _transcription_service.update_caption_type(meeting_id, caption_id, label)
+
                                 if not requirements:
                                     return
                                     
