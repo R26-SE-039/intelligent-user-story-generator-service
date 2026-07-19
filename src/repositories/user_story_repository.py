@@ -10,6 +10,12 @@ from src.models.user_story import GeneratedStory
 class UserStoryRepository:
     def __init__(self, gateway: PostgresGateway) -> None:
         self._gateway = gateway
+        try:
+            self._gateway.execute(
+                f'ALTER TABLE "{self._gateway.settings.user_stories_table}" ADD COLUMN IF NOT EXISTS invest_validation JSONB;'
+            )
+        except Exception as e:
+            pass
 
     def save(self, stories: list[GeneratedStory], meeting_id: str | None = None) -> None:
         if not stories:
@@ -17,6 +23,7 @@ class UserStoryRepository:
 
         story_rows = []
         ac_rows = []
+        import json
         
         for story in stories:
             try:
@@ -25,6 +32,11 @@ class UserStoryRepository:
             except ValueError:
                 story.story_id = str(uuid4())
             story_id = story.story_id
+
+            invest_dict = story.invest_validation.model_dump() if story.invest_validation else {
+                "Independent": True, "Negotiable": True, "Valuable": True, "Estimable": True, "Small": True, "Testable": True
+            }
+
             story_rows.append(
                 {
                     "id": story_id,
@@ -33,6 +45,7 @@ class UserStoryRepository:
                     "story": story.story,
                     "priority": story.priority,
                     "status": story.status,
+                    "invest_validation": json.dumps(invest_dict)
                 }
             )
             

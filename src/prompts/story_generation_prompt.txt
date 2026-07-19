@@ -15,7 +15,15 @@ Example:
       "confidence": 0.95,
       "status": "ready",
       "clarification_questions": [],
-      "evidence_refs": ["chunk-id-1"]
+      "evidence_refs": ["chunk-id-1"],
+      "invest_validation": {
+        "Independent": true,
+        "Negotiable": true,
+        "Valuable": true,
+        "Estimable": true,
+        "Small": true,
+        "Testable": true
+      }
     }
   ]
 }
@@ -24,6 +32,7 @@ Example:
 - **Story Format**: "As a [User Role], I want [Feature] so that [Value/Benefit]."
 - **Acceptance Criteria**: Provide 3-5 functional, testable bullet points per story.
 - **Evidence**: Every story MUST have at least one valid ID in "evidence_refs" from the provided context.
+- **INVEST Validation**: Evaluate each story against INVEST criteria (Independent, Negotiable, Valuable, Estimable, Small, Testable) and set boolean flags.
 - **No Markdown**: Return RAW JSON only. Do not include ```json tags.
 
 Output your response matching the `StoryBatch` schema exactly.

@@ -4,6 +4,15 @@ from __future__ import annotations
 from typing import Literal
 from pydantic import BaseModel, Field
 
+class InvestValidation(BaseModel):
+    """INVEST quality validation flags."""
+    Independent: bool = True
+    Negotiable: bool = True
+    Valuable: bool = True
+    Estimable: bool = True
+    Small: bool = True
+    Testable: bool = True
+
 class GeneratedStory(BaseModel):
     """Structured user story output."""
     story_id: str
@@ -15,6 +24,7 @@ class GeneratedStory(BaseModel):
     status: Literal["ready", "needs_clarification"] = "ready"
     clarification_questions: list[str] = Field(default_factory=list)
     evidence_refs: list[str]
+    invest_validation: InvestValidation | None = Field(default_factory=InvestValidation)
 
 class StoryBatch(BaseModel):
     """Collection of generated stories."""

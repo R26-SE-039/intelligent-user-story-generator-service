@@ -13,8 +13,16 @@ Return ONLY a JSON object:
       "confidence": 0.95,
       "status": "ready",
       "clarification_questions": [],
-      "evidence_refs": ["req-uuid-1"]
+      "evidence_refs": ["req-uuid-1"],
+      "invest_validation": {
+        "Independent": true,
+        "Negotiable": true,
+        "Valuable": true,
+        "Estimable": true,
+        "Small": true,
+        "Testable": true
+      }
     }
   ]
 }
-Each story MUST list the exact requirement ID it satisfies in "evidence_refs". No markdown, return raw JSON.
+Each story MUST list the exact requirement ID it satisfies in "evidence_refs". Assess each story against INVEST principles (Independent, Negotiable, Valuable, Estimable, Small, Testable) and return true/false flags. No markdown, return raw JSON.
