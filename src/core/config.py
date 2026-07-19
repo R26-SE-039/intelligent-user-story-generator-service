@@ -62,6 +62,7 @@ class Settings(BaseSettings):
 
     chroma_persist_directory: Path = Field(default=Path("data/vector_index/chroma"), alias="CHROMA_PERSIST_DIRECTORY")
     vector_db_collection: str = Field(default="transcript_chunks", alias="VECTOR_DB_COLLECTION")
+    modernbert_model_path: Path = Field(default=Path("models/modernbert-utterance-classifier"), alias="MODERNBERT_MODEL_PATH")
 
     chunk_size_words: int = Field(default=220, alias="CHUNK_SIZE_WORDS")
     chunk_overlap_words: int = Field(default=40, alias="CHUNK_OVERLAP_WORDS")
