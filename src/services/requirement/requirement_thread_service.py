@@ -112,7 +112,7 @@ Return ONLY a JSON object:
             similar_threads = self.thread_repo.find_similar_threads(
                 meeting_id=meeting_id,
                 embedding=embedding,
-                distance_threshold=0.45,
+                distance_threshold=0.30,
                 limit=1,
             )
 

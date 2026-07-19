@@ -93,7 +93,9 @@ class TranscriptionService:
         with self._lock:
             if meeting_id not in self._participants:
                 self._participants[meeting_id] = {}
+            if meeting_id not in self._connections:
                 self._connections[meeting_id] = []
+            if meeting_id not in self._sessions:
                 self._sessions[meeting_id] = []
             
             self._participants[meeting_id][conn_id] = name

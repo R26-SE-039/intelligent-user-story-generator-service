@@ -122,9 +122,34 @@ def get_meeting_transcript(
 ):
     try:
         transcript = _transcription_service.get_captions(meeting_id)
-        return {"status": "success", "transcript": transcript}
+        if transcript:
+            return {"status": "success", "transcript": transcript}
     except ValueError:
-        raise HTTPException(status_code=404, detail="Session not found")
+        pass
+
+    # DB Fallback if meeting session is no longer in active memory
+    try:
+        transcripts_db = _gateway.select("transcripts", eq={"meeting_id": meeting_id})
+        if transcripts_db:
+            t_id = transcripts_db[0]["id"]
+            utterances_db = _gateway.select("transcript_utterances", eq={"transcript_id": t_id})
+            captions = []
+            for u in utterances_db:
+                captions.append({
+                    "id": u.get("id"),
+                    "speaker": u.get("speaker_name", "Unknown"),
+                    "speaker_id": str(u.get("speaker_id")) if u.get("speaker_id") else None,
+                    "text": u.get("utterance_text", ""),
+                    "timestamp_start": float(u["start_time"]) if u.get("start_time") is not None else None,
+                    "timestamp_end": float(u["end_time"]) if u.get("end_time") is not None else None,
+                    "created_at": str(u.get("created_at")) if u.get("created_at") else None,
+                    "utterance_type": u.get("utterance_type")
+                })
+            return {"status": "success", "transcript": captions}
+    except Exception as e:
+        LOGGER.warning("[SpeechRoute] DB fallback transcript fetch failed: %s", e)
+
+    return {"status": "success", "transcript": []}
 
 @router.post("/meeting/{meeting_id}/analyze")
 def analyze_meeting(
@@ -159,19 +184,20 @@ def finalize_meeting(
         # Mark the meeting as completed and set end_time
         _meeting_repo.end_meeting(meeting_id)
         
-        captions = _transcription_service.get_captions(meeting_id)
-        captions_dicts = [cap.model_dump() for cap in captions]
-        mappings = _transcription_service.get_requirement_mappings(meeting_id)
+        try:
+            captions = _transcription_service.get_captions(meeting_id)
+            captions_dicts = [cap.model_dump() for cap in captions]
+            mappings = _transcription_service.get_requirement_mappings(meeting_id)
+            result = _meeting_repo.finalize_transcript(meeting_id, captions_dicts, mappings)
+        except ValueError:
+            result = {"transcript_id": None, "utterance_count": 0}
+
+        # Stop and clear in-memory session after saving
+        _transcription_service.stop_session(meeting_id)
         
-        result = _meeting_repo.finalize_transcript(meeting_id, captions_dicts, mappings)
-        if not result:
-            # We don't raise 404 here, we just return success with empty result
-            # because the meeting was still ended successfully.
-            return {"status": "success", "data": {"transcript_id": None, "utterance_count": 0}}
-        
-        return {"status": "success", "data": result}
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Session not found")
+        return {"status": "success", "data": result or {"transcript_id": None, "utterance_count": 0}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/meeting/{meeting_id}/requirements")
@@ -180,9 +206,10 @@ def get_meeting_requirements(
     user: dict = Depends(get_current_user)
 ):
     try:
-        # Fetch all requirements (active, conflicted, discarded, etc.) for review
+        # Fetch all raw requirements (active, conflicted, discarded, etc.) for review
         requirements = _req_repo.get_all_for_conflict_check(meeting_id)
-        return {"status": "success", "requirements": requirements}
+        threads = _thread_service.thread_repo.get_threads_by_meeting(meeting_id)
+        return {"status": "success", "requirements": requirements, "threads": threads}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -222,9 +249,16 @@ class EditedRequirementItem(BaseModel):
     requirement_id: str
     text: str
 
+class EditedThreadItem(BaseModel):
+    thread_id: str
+    title: str | None = None
+    summary: str | None = None
+    action: str = "VALIDATED"  # 'VALIDATED' | 'DISCARDED'
+
 class FinalizeRequirementsRequest(BaseModel):
-    resolutions: list[ResolutionItem]
-    edited_requirements: list[EditedRequirementItem]
+    resolutions: list[ResolutionItem] = []
+    edited_requirements: list[EditedRequirementItem] = []
+    edited_threads: list[EditedThreadItem] = []
 
 
 @router.post("/meeting/{meeting_id}/requirements/finalize")
@@ -234,7 +268,33 @@ def finalize_requirements(
     user: dict = Depends(get_current_user)
 ):
     try:
-        # 1. Update any inline edited requirements
+        # 1. Process edited requirement threads
+        for th in body.edited_threads:
+            thread_id = th.thread_id
+            if th.action == "VALIDATED":
+                summary_text = th.summary or th.title or "Finalized Requirement"
+                _thread_service.thread_repo.update_thread_state(thread_id, "VALIDATED", summary=summary_text)
+
+                # Set original raw requirements belonging to this thread to elicited
+                _gateway.update("requirements", {"status": "elicited"}, eq={"thread_id": thread_id})
+
+                # Promote thread summary into an active row in requirements table for story generation
+                from src.models.requirement import Requirement
+                final_req = Requirement(
+                    requirement_id=thread_id,
+                    meeting_id=meeting_id,
+                    requirement_text=summary_text,
+                    requirement_type="functional",
+                    status="active"
+                )
+                _req_repo.save([final_req])
+                _gateway.update("requirements", {"thread_id": thread_id}, eq={"id": thread_id})
+
+            elif th.action == "DISCARDED":
+                _thread_service.thread_repo.update_thread_state(thread_id, "DISCARDED")
+                _gateway.update("requirements", {"status": "discarded"}, eq={"thread_id": thread_id})
+
+        # 2. Update any inline edited raw requirements
         for item in body.edited_requirements:
             _req_repo.update_status(item.requirement_id, "active")  # Reset/ensure active
             _gateway.update(
