@@ -169,3 +169,18 @@ class PostgresGateway:
                 rows = cur.fetchall()
                 # RealDictRow behaves mostly like a dict
                 return [dict(row) for row in rows]
+
+    def execute(self, query: str, params: tuple | list | None = None) -> None:
+        """Execute a raw SQL command (e.g. UPDATE, INSERT, ALTER)."""
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params or ())
+            conn.commit()
+
+    def execute_query(self, query: str, params: tuple | list | None = None) -> list[dict[str, Any]]:
+        """Execute a raw SELECT query and return rows as dictionary list."""
+        with self._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, params or ())
+                rows = cur.fetchall()
+                return [dict(row) for row in rows]

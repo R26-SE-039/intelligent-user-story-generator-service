@@ -25,6 +25,7 @@ from src.repositories.meeting_repository import MeetingRepository
 from src.repositories.requirement_repository import RequirementRepository
 from src.repositories.conflict_repository import ConflictRepository
 from src.services.requirement.requirement_extractor import RequirementExtractorService
+from src.services.requirement.requirement_thread_service import RequirementThreadService
 from src.services.conflict.conflict_detector import ConflictDetectorService
 from src.db.postgres import PostgresGateway
 from src.core.config import load_speech_settings
@@ -41,6 +42,7 @@ _conflict_repo = ConflictRepository(_gateway)
 _transcription_service = TranscriptionService()
 _req_extractor = RequirementExtractorService()
 _conflict_detector = ConflictDetectorService()
+_thread_service = RequirementThreadService(_gateway)
 
 
 @router.get("/health")
@@ -193,6 +195,18 @@ def get_meeting_conflicts(
     try:
         conflicts = _conflict_repo.get_by_meeting(meeting_id)
         return {"status": "success", "conflicts": conflicts}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/meeting/{meeting_id}/threads")
+def get_meeting_threads(
+    meeting_id: str,
+    user: dict = Depends(get_current_user)
+):
+    try:
+        threads = _thread_service.thread_repo.get_threads_by_meeting(meeting_id)
+        return {"status": "success", "threads": threads}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -448,6 +462,17 @@ async def websocket_endpoint(
                                 # Save embeddings to DB
                                 await asyncio.to_thread(_req_repo.save_embeddings, embeddings_data)
                                 
+                                # Process requirements through Requirement Thread Manager (State Machine + Threading)
+                                for req in requirements:
+                                    emb = req_embeddings.get(req.requirement_id)
+                                    await asyncio.to_thread(
+                                        _thread_service.process_requirement,
+                                        meeting_id,
+                                        req.requirement_id,
+                                        req.requirement_text,
+                                        emb
+                                    )
+
                                 # Save mappings in memory until finalize_transcript
                                 _transcription_service.add_requirement_mappings(meeting_id, mappings)
                                 
@@ -456,9 +481,13 @@ async def websocket_endpoint(
                                     "type": "requirements",
                                     "data": [r.model_dump() for r in requirements]
                                 }
+                                thread_signal = {"type": "THREAD_UPDATED", "data": {}}
                                 for c in _transcription_service.get_connections(meeting_id):
-                                    try: await c.send_json(req_payload)
-                                    except: pass
+                                    try:
+                                        await c.send_json(req_payload)
+                                        await c.send_json(thread_signal)
+                                    except:
+                                        pass
                                     
                                 print(f"[Requirements] Extracted {len(requirements)} requirements from utterance.")
                                 

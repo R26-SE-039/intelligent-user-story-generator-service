@@ -130,11 +130,21 @@ class UtteranceClassifier:
             confidence = probabilities[0][predicted_id].item()
 
         label = self.model.config.id2label[predicted_id]
+        conf_pct = round(confidence * 100, 2)
+        is_req = label in REQUIREMENT_LABELS
+
+        LOGGER.info(
+            "[ModernBERT Classification] Input: '%s...' -> Label: %s (Confidence: %.1f%%, IsRequirement: %s)",
+            text[:70].replace("\n", " "),
+            label,
+            conf_pct,
+            is_req
+        )
 
         return ClassificationResult(
             label=label,
             confidence=round(confidence, 4),
-            is_requirement=label in REQUIREMENT_LABELS,
+            is_requirement=is_req,
         )
 
     def classify_batch(self, texts: list[str]) -> list[ClassificationResult]:
@@ -167,11 +177,21 @@ class UtteranceClassifier:
         for i, pred_id in enumerate(predicted_ids):
             label = self.model.config.id2label[pred_id]
             confidence = probabilities[i][pred_id].item()
+            is_req = label in REQUIREMENT_LABELS
+            LOGGER.info(
+                "[ModernBERT Classification Batch] Item %d/%d: '%s...' -> Label: %s (Confidence: %.1f%%, IsRequirement: %s)",
+                i + 1,
+                len(texts),
+                texts[i][:60].replace("\n", " "),
+                label,
+                round(confidence * 100, 1),
+                is_req
+            )
             results.append(
                 ClassificationResult(
                     label=label,
                     confidence=round(confidence, 4),
-                    is_requirement=label in REQUIREMENT_LABELS,
+                    is_requirement=is_req,
                 )
             )
 

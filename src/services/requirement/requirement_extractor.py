@@ -47,45 +47,24 @@ class RequirementExtractorService:
         return (self.prompts_dir / name).read_text(encoding="utf-8")
 
     def get_embedding(self, text: str) -> list[float]:
-        """Generate a vector embedding for the text using the shared vector store logic."""
+        """Generate a 3072-dimensional vector embedding for the text using Gemini embedding model."""
         if not text:
-            return [0.0] * 1536
-            
+            return [0.0] * 3072
+
         try:
-            # This calls ChromaVectorStore.embed() which automatically handles 
-            # OpenRouter vs OpenAI differences or falls back to local hashing.
             emb = self.vector_store.embed(text)
-            
-            # pgvector requires exactly 1536 dimensions as defined in init.sql.
-            # If the fallback hash generator returns 256, we must pad it to 1536.
-            if len(emb) < 1536:
-                emb = emb + [0.0] * (1536 - len(emb))
-            elif len(emb) > 1536:
-                emb = emb[:1536]
-                
+
+            # pgvector requires exactly 3072 dimensions as defined in migration.
+            if len(emb) < 3072:
+                emb = emb + [0.0] * (3072 - len(emb))
+            elif len(emb) > 3072:
+                emb = emb[:3072]
+
             return emb
         except Exception as e:
-            print(f"[RequirementExtractor] Warning: Failed to generate embedding: {e}")
-            return [0.0] * 1536
+            LOGGER.warning(f"[RequirementExtractor] Failed to generate embedding: {e}")
+            return [0.0] * 3072
 
-    def extract(
-        self,
-        utterance_text: str,
-        meeting_id: str,
-        previous_utterance: str = "",
-        next_utterance: str = "",
-    ) -> list[Requirement]:
-        """Extract requirements from a single utterance text.
-
-        Args:
-            utterance_text: The current meeting utterance to classify and extract from.
-            meeting_id: The meeting identifier to tag requirements with.
-            previous_utterance: The utterance spoken just before this one (for context).
-            next_utterance: The utterance spoken just after this one (for context).
-
-        Returns:
-            List of Requirement objects, or empty list if not a requirement.
-        """
     def extract(
         self,
         utterance_text: str,
@@ -116,20 +95,23 @@ class RequirementExtractorService:
         )
         classification = self.classifier.classify(context_text)
 
-        print(
-            f"[UtteranceClassifier] '{utterance_text[:80]}' → "
-            f"{classification.label} (confidence={classification.confidence * 100:.1f}%)"
+        LOGGER.info(
+            "[ModernBERT Classification] Utterance: '%s...' -> Label: %s (Confidence: %.1f%%)",
+            utterance_text[:80].replace("\n", " "),
+            classification.label,
+            classification.confidence * 100,
         )
 
         # Fast-path: skip LLM call entirely for non-requirement utterances
         if not classification.is_requirement:
-            print(
-                f"[UtteranceClassifier] Skipping LLM — label is '{classification.label}', not a Requirement."
+            LOGGER.info(
+                "[ModernBERT Classification] Skipping LLM extraction - Label '%s' is not a Requirement.",
+                classification.label,
             )
             return [], classification.label
 
         LOGGER.info(
-            "[RequirementExtractor] ModernBERT confirmed Requirement. Proceeding to LLM extraction..."
+            "[ModernBERT Classification] ModernBERT confirmed 'Requirement'. Proceeding to LLM extraction..."
         )
             
         system_prompt = self._load_prompt("requirement_extraction_prompt.txt")
