@@ -272,43 +272,8 @@ Return ONLY a JSON object:
         req_extractor: Any = None,
         user_id: str | None = None,
     ) -> None:
-        """Process finalized thread edits, inline raw requirement edits, conflict resolutions, and cleanup."""
-        import uuid
-        from src.models.requirement import Requirement
-
-        # 1. Process edited requirement threads
-        for th in edited_threads:
-            thread_id = th.thread_id
-            if th.action == "VALIDATED":
-                summary_text = th.summary or th.title or "Finalized Requirement"
-                self.thread_repo.update_thread_state(thread_id, "VALIDATED", summary=summary_text)
-                req_repo.update_status_by_thread(thread_id, "elicited")
-
-                # Promote thread summary into an active row in requirements table for story generation
-                final_req = Requirement(
-                    requirement_id=thread_id,
-                    meeting_id=meeting_id,
-                    requirement_text=summary_text,
-                    requirement_type="functional",
-                    status="active"
-                )
-                req_repo.save([final_req])
-                req_repo.update_thread_id(thread_id, thread_id)
-
-            elif th.action == "DISCARDED":
-                self.thread_repo.update_thread_state(thread_id, "DISCARDED")
-                req_repo.update_status_by_thread(thread_id, "discarded")
-
-        # 2. Update any inline edited raw requirements
-        for item in edited_requirements:
-            req_repo.update_status(item.requirement_id, "active")
-            if req_extractor:
-                new_emb = req_extractor.get_embedding(item.text)
-                req_repo.update_text_and_reembed(item.requirement_id, item.text, new_emb)
-            else:
-                req_repo.update_text(item.requirement_id, item.text)
-
-        # 3. Process active conflict resolutions
+        """Process conflict resolutions, edited requirement threads, inline raw requirement edits, and cleanup."""
+        # 1. Process active conflict resolutions FIRST so BA decisions are recorded and applied
         for res in resolutions:
             try:
                 self.resolve_single_conflict(
@@ -324,6 +289,45 @@ Return ONLY a JSON object:
                 )
             except Exception as exc:
                 LOGGER.warning("[RequirementThreadService] Batch conflict resolution failed for %s: %s", res.conflict_id, exc)
+
+        # 2. Process edited requirement threads
+        for th in edited_threads:
+            thread_id = th.thread_id
+            if th.action == "VALIDATED":
+                summary_text = th.summary or th.title or "Finalized Requirement"
+                self.thread_repo.update_thread_state(thread_id, "VALIDATED", summary=summary_text)
+
+                # Update non-superseded/duplicate/discarded requirements under thread to active
+                if hasattr(req_repo, "update_active_status_by_thread"):
+                    req_repo.update_active_status_by_thread(thread_id, "active")
+                else:
+                    req_repo.update_status_by_thread(thread_id, "active")
+
+                # Update in-place the primary active requirement under this thread with summary_text & re-embed vector
+                thread_reqs = self.gateway.select(
+                    self.gateway.settings.requirements_table,
+                    eq={"thread_id": thread_id, "status": "active"}
+                )
+                if thread_reqs:
+                    primary_req_id = str(thread_reqs[0]["id"])
+                    new_emb = req_extractor.get_embedding(summary_text) if req_extractor else None
+                    req_repo.update_text_and_reembed(primary_req_id, summary_text, new_emb)
+
+            elif th.action == "DISCARDED":
+                self.thread_repo.update_thread_state(thread_id, "DISCARDED")
+                if hasattr(req_repo, "update_active_status_by_thread"):
+                    req_repo.update_active_status_by_thread(thread_id, "discarded")
+                else:
+                    req_repo.update_status_by_thread(thread_id, "discarded")
+
+        # 3. Update any inline edited raw requirements
+        for item in edited_requirements:
+            req_repo.update_status(item.requirement_id, "active")
+            if req_extractor:
+                new_emb = req_extractor.get_embedding(item.text)
+                req_repo.update_text_and_reembed(item.requirement_id, item.text, new_emb)
+            else:
+                req_repo.update_text(item.requirement_id, item.text)
 
         # 4. Clean up any remaining conflicted requirements that weren't addressed
         remaining = req_repo.get_all_for_conflict_check(meeting_id)

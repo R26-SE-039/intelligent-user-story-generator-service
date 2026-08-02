@@ -101,6 +101,15 @@ class RequirementRepository:
             eq={"thread_id": thread_id}
         )
 
+    def update_active_status_by_thread(self, thread_id: str, status: str) -> None:
+        """Update status of requirements in a thread ONLY if their status is not superseded, duplicate, or discarded."""
+        req_table = self._gateway.settings.requirements_table
+        query = f'UPDATE "{req_table}" SET "status" = %s WHERE "thread_id" = %s AND "status" NOT IN (\'superseded\', \'duplicate\', \'discarded\')'
+        with self._gateway._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (status, thread_id))
+            conn.commit()
+
     def update_text(self, requirement_id: str, text: str) -> None:
         """Update requirement_text for a requirement."""
         self._gateway.update(

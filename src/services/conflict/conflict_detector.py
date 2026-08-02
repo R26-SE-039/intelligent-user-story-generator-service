@@ -70,12 +70,17 @@ class ConflictDetectorService:
             content = interaction.output_text.strip()
             print(f"[ConflictDetector] LLM raw response: {content[:300]}")
 
-            # Strip any accidental markdown fences
-            if content.startswith("```"):
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
-            content = content.strip()
+            # Extract JSON array substring between first '[' and last ']'
+            start_idx = content.find("[")
+            end_idx = content.rfind("]")
+            if start_idx != -1 and end_idx != -1:
+                content = content[start_idx : end_idx + 1]
+            else:
+                if content.startswith("```"):
+                    content = content.split("```")[1]
+                    if content.startswith("json"):
+                        content = content[4:]
+                content = content.strip()
 
             results = json.loads(content)
 

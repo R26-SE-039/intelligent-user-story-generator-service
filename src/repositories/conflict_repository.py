@@ -41,7 +41,7 @@ class ConflictRepository:
         meetings_table = self._gateway.settings.meetings_table
 
         status_clause = ""
-        params: list = [meeting_id]
+        params: list = [meeting_id, meeting_id]
         if status:
             status_clause = 'AND c."status" = %s'
             params.append(status)
@@ -53,12 +53,16 @@ class ConflictRepository:
                 ra."requirement_type" AS requirement_a_type,
                 rb."requirement_text" AS requirement_b_text,
                 rb."requirement_type" AS requirement_b_type,
-                mb."title" AS source_meeting_title
+                rb."meeting_id" AS source_meeting_id,
+                CASE WHEN rb."meeting_id" = %s THEN NULL ELSE mb."title" END AS source_meeting_title
             FROM "{conflicts_table}" c
             JOIN "{req_table}" ra ON ra."id" = c."requirement_a_id"
             JOIN "{req_table}" rb ON rb."id" = c."requirement_b_id"
             LEFT JOIN "{meetings_table}" mb ON mb."id" = rb."meeting_id"
-            WHERE ra."meeting_id" = %s {status_clause} AND c."conflict_type" != 'duplicate'
+            WHERE ra."meeting_id" = %s
+              {status_clause}
+              AND ra."status" NOT IN ('superseded', 'duplicate', 'discarded')
+              AND rb."status" NOT IN ('superseded', 'duplicate', 'discarded')
             ORDER BY c."id" ASC
         """
         from psycopg2.extras import RealDictCursor

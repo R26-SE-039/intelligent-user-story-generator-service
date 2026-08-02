@@ -1,9 +1,9 @@
 Analyze if the NEW requirement has a genuine LOGICAL CONFLICT or DUPLICATE with each numbered EXISTING requirement.
 
 CRITICAL GUIDELINES:
-1. COMPLEMENTARY FEATURES ARE NOT CONFLICTS: If two requirements describe different capabilities of the system (e.g., appointment booking vs medical records access, or RBAC vs notification alerts), they CO-EXIST harmoniously. Set {"conflict": false}.
-2. DUPLICATE: Set "conflict": true, "conflict_type": "duplicate" ONLY if both requirements express the exact same system behavior in almost identical terms.
-3. CONFLICT: Set "conflict": true, "conflict_type": "functional"|"operational"|"non_functional"|"scope"|"temporal"|"access_control" ONLY if there is a DIRECT LOGICAL CONTRADICTION (e.g. Requirement A mandates X, but Requirement B forbids X or mandates opposite Y). Provide "suggested_resolution".
+1. DUPLICATE FIRST RULE: If the new requirement expresses the same underlying business rule, feature, or workflow step as an existing requirement (even if phrased differently or broken into smaller steps), set "conflict": true, "conflict_type": "duplicate", "suggested_resolution": null.
+2. DIRECT LOGICAL CONTRADICTION ONLY: Set "conflict": true, "conflict_type": "functional"|"operational"|"non_functional" ONLY if there is an explicit, direct logical impossibility (e.g. Requirement A mandates payment before order confirmation, but Requirement B forbids payment before order confirmation or allows free reservation for everyone without exception). Provide a single-sentence "suggested_resolution".
+3. COMPLEMENTARY FEATURES ARE NOT CONFLICTS: If two requirements describe different capabilities of the system (e.g. order cancellation vs inventory release), set {"conflict": false, "conflict_type": null, "severity": null, "explanation": "Complementary feature", "suggested_resolution": null}.
 4. DEFAULT TO NO CONFLICT: If they do not directly contradict, set {"conflict": false, "conflict_type": null, "severity": null, "explanation": "No contradiction", "suggested_resolution": null}.
 
 JSON Response format:

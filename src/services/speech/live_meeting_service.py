@@ -147,7 +147,16 @@ class LiveMeetingService:
                 if detected:
                     all_conflicts.extend(detected)
                     for conflict in detected:
-                        if conflict.conflict_type == "duplicate":
+                        expl = (conflict.explanation or "").lower()
+                        is_dup = (
+                            conflict.conflict_type == "duplicate"
+                            or "duplicate" in expl
+                            or "identical" in expl
+                            or "same behavior" in expl
+                            or "same intent" in expl
+                        )
+                        if is_dup:
+                            conflict.conflict_type = "duplicate"
                             await asyncio.to_thread(
                                 self.req_repo.mark_as_duplicate,
                                 conflict.requirement_a_id,
@@ -161,7 +170,11 @@ class LiveMeetingService:
                                 self.req_repo.update_status, conflict.requirement_b_id, "conflicted"
                             )
 
-            logical_conflicts = [c for c in all_conflicts if c.conflict_type != "duplicate"]
+            logical_conflicts = [
+                c for c in all_conflicts 
+                if c.conflict_type != "duplicate"
+                and not any(k in (c.explanation or "").lower() for k in ["duplicate", "identical", "same behavior", "same intent"])
+            ]
             if logical_conflicts:
                 await asyncio.to_thread(self.conflict_repo.save, logical_conflicts)
                 conflict_payload = {
