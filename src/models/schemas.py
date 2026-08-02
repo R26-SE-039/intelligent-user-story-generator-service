@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from .transcript import Utterance, Transcript, Chunk
 from .requirement import Requirement
 from .conflict import Conflict
-from .user_story import GeneratedStory, StoryBatch, StoryIssue
+from .user_story import GeneratedStory, StoryBatch, StoryIssue, ValidationResult
 
 class IngestResponse(BaseModel):
     """Response for transcript preprocessing endpoint."""
@@ -27,6 +27,7 @@ class GenerateStoriesResponse(BaseModel):
     stories: list[GeneratedStory]
     issues: list[StoryIssue]
     evidence_chunk_ids: list[str]
+    validation_results: list[ValidationResult] = []
 
 class PipelineRunRequest(BaseModel):
     """Request payload for end-to-end pipeline execution."""
@@ -43,11 +44,33 @@ class PipelineRunResponse(BaseModel):
     stories: list[GeneratedStory]
     issues: list[StoryIssue]
     evidence_chunk_ids: list[str]
+    validation_results: list[ValidationResult] = []
+
+class ResolutionItem(BaseModel):
+    conflict_id: str
+    resolution_type: str  # 'keep_a' | 'keep_b' | 'merge' | 'dismiss'
+    merged_text: str | None = None
+
+class EditedRequirementItem(BaseModel):
+    requirement_id: str
+    text: str
+
+class EditedThreadItem(BaseModel):
+    thread_id: str
+    title: str | None = None
+    summary: str | None = None
+    action: str = "VALIDATED"  # 'VALIDATED' | 'DISCARDED'
+
+class FinalizeRequirementsRequest(BaseModel):
+    resolutions: list[ResolutionItem] = []
+    edited_requirements: list[EditedRequirementItem] = []
+    edited_threads: list[EditedThreadItem] = []
 
 __all__ = [
     "Utterance", "Transcript", "Chunk",
     "Requirement", "Conflict",
-    "GeneratedStory", "StoryBatch", "StoryIssue",
+    "GeneratedStory", "StoryBatch", "StoryIssue", "ValidationResult",
     "IngestResponse", "GenerateStoriesRequest", "GenerateStoriesResponse",
-    "PipelineRunRequest", "PipelineRunResponse"
+    "PipelineRunRequest", "PipelineRunResponse",
+    "ResolutionItem", "EditedRequirementItem", "EditedThreadItem", "FinalizeRequirementsRequest"
 ]

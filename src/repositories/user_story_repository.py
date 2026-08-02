@@ -10,12 +10,6 @@ from src.models.user_story import GeneratedStory
 class UserStoryRepository:
     def __init__(self, gateway: PostgresGateway) -> None:
         self._gateway = gateway
-        try:
-            self._gateway.execute(
-                f'ALTER TABLE "{self._gateway.settings.user_stories_table}" ADD COLUMN IF NOT EXISTS invest_validation JSONB;'
-            )
-        except Exception as e:
-            pass
 
     def save(self, stories: list[GeneratedStory], meeting_id: str | None = None) -> None:
         if not stories:
@@ -23,19 +17,10 @@ class UserStoryRepository:
 
         story_rows = []
         ac_rows = []
-        import json
-        
-        for story in stories:
-            try:
-                import uuid
-                uuid.UUID(story.story_id)
-            except ValueError:
-                story.story_id = str(uuid4())
-            story_id = story.story_id
 
-            invest_dict = story.invest_validation.model_dump() if story.invest_validation else {
-                "Independent": True, "Negotiable": True, "Valuable": True, "Estimable": True, "Small": True, "Testable": True
-            }
+        for story in stories:
+            # story.story_id is guaranteed to be a valid UUID by the model field_validator
+            story_id = story.story_id
 
             story_rows.append(
                 {
@@ -45,16 +30,15 @@ class UserStoryRepository:
                     "story": story.story,
                     "priority": story.priority,
                     "status": story.status,
-                    "invest_validation": json.dumps(invest_dict)
                 }
             )
-            
+
             for ac in story.acceptance_criteria:
                 ac_rows.append(
                     {
                         "id": str(uuid4()),
                         "user_story_id": story_id,
-                        "criteria": ac
+                        "criteria": ac,
                     }
                 )
 
@@ -69,13 +53,12 @@ class UserStoryRepository:
         values_list = []
         for m in mappings:
             values_list.append(tuple(self._gateway._format_value(m.get(c)) for c in columns))
-            
+
         col_str = ", ".join([f'"{c}"' for c in columns])
         query = f'INSERT INTO "{table}" ({col_str}) VALUES %s ON CONFLICT DO NOTHING'
-        
+
         from psycopg2.extras import execute_values
         with self._gateway._get_connection() as conn:
             with conn.cursor() as cur:
                 execute_values(cur, query, values_list)
             conn.commit()
-

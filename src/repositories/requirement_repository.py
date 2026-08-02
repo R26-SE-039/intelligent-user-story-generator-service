@@ -93,6 +93,30 @@ class RequirementRepository:
             eq={"id": requirement_id}
         )
 
+    def update_status_by_thread(self, thread_id: str, status: str) -> None:
+        """Update the status of all requirements belonging to a thread."""
+        self._gateway.update(
+            self._gateway.settings.requirements_table,
+            {"status": status},
+            eq={"thread_id": thread_id}
+        )
+
+    def update_text(self, requirement_id: str, text: str) -> None:
+        """Update requirement_text for a requirement."""
+        self._gateway.update(
+            self._gateway.settings.requirements_table,
+            {"requirement_text": text},
+            eq={"id": requirement_id}
+        )
+
+    def update_thread_id(self, requirement_id: str, thread_id: str) -> None:
+        """Set thread_id for a requirement."""
+        self._gateway.update(
+            self._gateway.settings.requirements_table,
+            {"thread_id": thread_id},
+            eq={"id": requirement_id}
+        )
+
     def find_similar_by_embedding(
         self, embedding: list[float], meeting_id: str, top_k: int = 10, exclude_id: str | None = None
     ) -> list[dict]:
@@ -119,7 +143,7 @@ class RequirementRepository:
         # previous requirements in the meeting (active, conflicted, etc.).
         # This prevents missing conflicts where one side was already flagged.
         query = f"""
-            SELECT r."id", r."requirement_text", r."requirement_type", r."status",
+            SELECT r."id", r."meeting_id", r."requirement_text", r."requirement_type", r."status",
                    (re."embedding" <=> %s::vector) AS distance
             FROM "{emb_table}" re
             JOIN "{req_table}" r ON r."id" = re."requirement_id"
@@ -133,6 +157,40 @@ class RequirementRepository:
         with self._gateway._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(query, tuple(params))
+                return [dict(row) for row in cur.fetchall()]
+
+    def find_similar_by_project(
+        self, embedding: list[float], project_id: str, top_k: int = 10, exclude_id: str | None = None
+    ) -> list[dict]:
+        """Use pgvector cosine similarity to find similar requirements across all meetings in a project."""
+        req_table = self._gateway.settings.requirements_table
+        emb_table = self._gateway.settings.requirement_embeddings_table
+        meetings_table = self._gateway.settings.meetings_table
+
+        vec_str = "[" + ",".join(str(x) for x in embedding) + "]"
+
+        exclude_clause = ""
+        params: list = [vec_str, project_id]
+        if exclude_id:
+            exclude_clause = 'AND r."id" != %s'
+            params.append(exclude_id)
+        params.append(top_k)
+
+        query = f"""
+            SELECT r."id", r."meeting_id", r."requirement_text", r."requirement_type", r."status",
+                   m."title" AS meeting_title,
+                   (re."embedding" <=> %s::vector) AS distance
+            FROM "{emb_table}" re
+            JOIN "{req_table}" r ON r."id" = re."requirement_id"
+            JOIN "{meetings_table}" m ON m."id" = r."meeting_id"
+            WHERE m."project_id" = %s
+            {exclude_clause}
+            ORDER BY distance ASC
+            LIMIT %s;
+        """
+
+        from psycopg2.extras import RealDictCursor
+        with self._gateway._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(query, tuple(params))
                 return [dict(row) for row in cur.fetchall()]
@@ -143,9 +201,6 @@ class RequirementRepository:
         """
         Fetch ALL requirements for a meeting (regardless of status) for LLM-based
         conflict checking. Excludes the new requirement itself by ID.
-
-        This bypasses the embedding-based pre-filter entirely, which is necessary
-        when using hash-based fallback embeddings that have no semantic meaning.
         """
         req_table = self._gateway.settings.requirements_table
 
@@ -156,7 +211,7 @@ class RequirementRepository:
             params.append(exclude_id)
 
         query = f"""
-            SELECT "id", "requirement_text", "requirement_type", "status"
+            SELECT "id", "meeting_id", "requirement_text", "requirement_type", "status", "duplicate_of_id"
             FROM "{req_table}"
             WHERE "meeting_id" = %s
             {exclude_clause}
@@ -168,3 +223,55 @@ class RequirementRepository:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(query, tuple(params))
                 return [dict(row) for row in cur.fetchall()]
+
+    def get_all_by_project_for_conflict_check(
+        self, project_id: str, exclude_id: str | None = None
+    ) -> list[dict]:
+        """Fetch ALL requirements across all meetings in a project for cross-meeting conflict detection."""
+        req_table = self._gateway.settings.requirements_table
+        meetings_table = self._gateway.settings.meetings_table
+
+        exclude_clause = ""
+        params: list = [project_id]
+        if exclude_id:
+            exclude_clause = 'AND r."id" != %s'
+            params.append(exclude_id)
+
+        query = f"""
+            SELECT r."id", r."meeting_id", r."requirement_text", r."requirement_type", r."status", m."title" AS meeting_title
+            FROM "{req_table}" r
+            JOIN "{meetings_table}" m ON m."id" = r."meeting_id"
+            WHERE m."project_id" = %s
+            {exclude_clause}
+            ORDER BY r."created_at" ASC;
+        """
+
+        from psycopg2.extras import RealDictCursor
+        with self._gateway._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, tuple(params))
+                return [dict(row) for row in cur.fetchall()]
+
+    def update_text_and_reembed(
+        self, requirement_id: str, new_text: str, embedding: list[float] | None = None
+    ) -> None:
+        """Update requirement_text, mark status active, and save/upsert new embedding vector."""
+        # 1. Update text & status
+        self._gateway.update(
+            self._gateway.settings.requirements_table,
+            {"requirement_text": new_text, "status": "active"},
+            eq={"id": requirement_id}
+        )
+
+        # 2. Re-embed vector into requirement_embeddings
+        if embedding:
+            self.save_embeddings([{"requirement_id": requirement_id, "embedding": embedding}])
+
+    def mark_as_duplicate(self, requirement_id: str, duplicate_of_id: str) -> None:
+        """Mark a requirement as a duplicate of another requirement."""
+        self._gateway.update(
+            self._gateway.settings.requirements_table,
+            {"status": "duplicate", "duplicate_of_id": duplicate_of_id},
+            eq={"id": requirement_id}
+        )
+

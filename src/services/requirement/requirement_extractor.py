@@ -102,16 +102,19 @@ class RequirementExtractorService:
             classification.confidence * 100,
         )
 
-        # Fast-path: skip LLM call entirely for non-requirement utterances
-        if not classification.is_requirement:
+        # Fast-path: skip LLM call for purely irrelevant utterances (e.g. Question, Discussion, Chitchat)
+        # Note: In software engineering meetings, requirements are frequently phrased as Suggestions
+        should_extract = classification.is_requirement or classification.label in ("Requirement", "Suggestion")
+        if not should_extract:
             LOGGER.info(
-                "[ModernBERT Classification] Skipping LLM extraction - Label '%s' is not a Requirement.",
+                "[ModernBERT Classification] Skipping LLM extraction - Label '%s' is not a Requirement/Suggestion.",
                 classification.label,
             )
             return [], classification.label
 
         LOGGER.info(
-            "[ModernBERT Classification] ModernBERT confirmed 'Requirement'. Proceeding to LLM extraction..."
+            "[ModernBERT Classification] ModernBERT confirmed '%s'. Proceeding to LLM extraction...",
+            classification.label,
         )
             
         system_prompt = self._load_prompt("requirement_extraction_prompt.txt")

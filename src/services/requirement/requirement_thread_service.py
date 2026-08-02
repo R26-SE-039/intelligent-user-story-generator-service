@@ -29,7 +29,7 @@ class RequirementState(str, Enum):
 
 
 class RequirementThreadService:
-    """Manager service for requirement thread grouping and state machine management."""
+    """Manager service for requirement thread grouping, state machine management, and BA conflict resolutions."""
 
     def __init__(self, gateway: PostgresGateway | None = None, settings: Settings | None = None) -> None:
         self.settings = settings or Settings()
@@ -92,17 +92,7 @@ Return ONLY a JSON object:
         requirement_text: str,
         embedding: list[float] | None = None,
     ) -> dict[str, Any]:
-        """Group requirement into a thread and update lifecycle state.
-
-        Args:
-            meeting_id: Meeting ID context.
-            requirement_id: ID of the requirement.
-            requirement_text: The text of the requirement.
-            embedding: 3072-dimensional vector embedding.
-
-        Returns:
-            Dict representing the associated thread data.
-        """
+        """Group requirement into a thread and update lifecycle state."""
         if not requirement_text:
             return {}
 
@@ -172,3 +162,171 @@ Return ONLY a JSON object:
                 title[:40],
             )
             return new_thread
+
+    def resolve_single_conflict(
+        self,
+        conflict_id: str,
+        resolution_type: str,
+        req_repo: Any,
+        conflict_repo: Any,
+        req_extractor: Any = None,
+        edited_text_a: str | None = None,
+        edited_text_b: str | None = None,
+        merged_text: str | None = None,
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Execute BA Conflict Resolution:
+          1. Target requirement text & status update.
+          2. Vector re-embedding (Gemini embedding + pgvector upsert).
+          3. Competing requirement status update (superseded / discarded / duplicate).
+          4. Conflict record audit trail update (status='resolved', resolved_by, resolved_at).
+        """
+        conflict = conflict_repo.get_by_id(conflict_id)
+        if not conflict:
+            raise ValueError(f"Conflict with ID {conflict_id} not found")
+
+        req_a_id = str(conflict["requirement_a_id"])
+        req_b_id = str(conflict["requirement_b_id"])
+
+        # Fetch original texts for audit trail
+        reqs = self.gateway.select(self.gateway.settings.requirements_table, eq={"id": req_a_id})
+        prev_a = reqs[0].get("requirement_text", "") if reqs else ""
+        reqs_b = self.gateway.select(self.gateway.settings.requirements_table, eq={"id": req_b_id})
+        prev_b = reqs_b[0].get("requirement_text", "") if reqs_b else ""
+
+        if resolution_type == "apply_suggestion":
+            target_text = conflict.get("suggested_resolution") or merged_text or edited_text_a or prev_a
+            new_embedding = req_extractor.get_embedding(target_text) if req_extractor else None
+            req_repo.update_text_and_reembed(req_a_id, target_text, new_embedding)
+            req_repo.update_status(req_b_id, "superseded")
+
+        elif resolution_type == "keep_a":
+            req_repo.update_status(req_a_id, "active")
+            req_repo.update_status(req_b_id, "superseded")
+
+        elif resolution_type == "keep_b":
+            req_repo.update_status(req_b_id, "active")
+            req_repo.update_status(req_a_id, "superseded")
+
+        elif resolution_type == "edit_a":
+            target_text = edited_text_a or prev_a
+            new_embedding = req_extractor.get_embedding(target_text) if req_extractor else None
+            req_repo.update_text_and_reembed(req_a_id, target_text, new_embedding)
+            req_repo.update_status(req_b_id, "superseded")
+
+        elif resolution_type == "edit_b":
+            target_text = edited_text_b or prev_b
+            new_embedding = req_extractor.get_embedding(target_text) if req_extractor else None
+            req_repo.update_text_and_reembed(req_b_id, target_text, new_embedding)
+            req_repo.update_status(req_a_id, "superseded")
+
+        elif resolution_type == "merge":
+            target_text = merged_text or conflict.get("suggested_resolution") or prev_a
+            new_embedding = req_extractor.get_embedding(target_text) if req_extractor else None
+            req_repo.update_text_and_reembed(req_a_id, target_text, new_embedding)
+            req_repo.update_status(req_b_id, "superseded")
+
+        elif resolution_type == "accept_duplicate":
+            req_repo.update_status(req_a_id, "active")
+            req_repo.mark_as_duplicate(req_b_id, duplicate_of_id=req_a_id)
+
+        elif resolution_type == "dismiss":
+            req_repo.update_status(req_a_id, "active")
+            req_repo.update_status(req_b_id, "active")
+
+        else:
+            raise ValueError(f"Unknown conflict resolution type: '{resolution_type}'")
+
+        # Record audit log in conflicts table
+        conflict_repo.resolve_conflict(
+            conflict_id=conflict_id,
+            resolved_by=user_id,
+            previous_text_a=prev_a,
+            previous_text_b=prev_b,
+        )
+
+        LOGGER.info(
+            "[RequirementThreadService] Conflict %s resolved (action: %s) by user %s",
+            conflict_id,
+            resolution_type,
+            user_id,
+        )
+
+        return {
+            "status": "success",
+            "conflict_id": conflict_id,
+            "resolution_type": resolution_type,
+            "resolved_requirement_a_id": req_a_id,
+            "resolved_requirement_b_id": req_b_id,
+        }
+
+    def finalize_requirements(
+        self,
+        meeting_id: str,
+        edited_threads: list[Any],
+        edited_requirements: list[Any],
+        resolutions: list[Any],
+        req_repo: Any,
+        conflict_repo: Any,
+        req_extractor: Any = None,
+        user_id: str | None = None,
+    ) -> None:
+        """Process finalized thread edits, inline raw requirement edits, conflict resolutions, and cleanup."""
+        import uuid
+        from src.models.requirement import Requirement
+
+        # 1. Process edited requirement threads
+        for th in edited_threads:
+            thread_id = th.thread_id
+            if th.action == "VALIDATED":
+                summary_text = th.summary or th.title or "Finalized Requirement"
+                self.thread_repo.update_thread_state(thread_id, "VALIDATED", summary=summary_text)
+                req_repo.update_status_by_thread(thread_id, "elicited")
+
+                # Promote thread summary into an active row in requirements table for story generation
+                final_req = Requirement(
+                    requirement_id=thread_id,
+                    meeting_id=meeting_id,
+                    requirement_text=summary_text,
+                    requirement_type="functional",
+                    status="active"
+                )
+                req_repo.save([final_req])
+                req_repo.update_thread_id(thread_id, thread_id)
+
+            elif th.action == "DISCARDED":
+                self.thread_repo.update_thread_state(thread_id, "DISCARDED")
+                req_repo.update_status_by_thread(thread_id, "discarded")
+
+        # 2. Update any inline edited raw requirements
+        for item in edited_requirements:
+            req_repo.update_status(item.requirement_id, "active")
+            if req_extractor:
+                new_emb = req_extractor.get_embedding(item.text)
+                req_repo.update_text_and_reembed(item.requirement_id, item.text, new_emb)
+            else:
+                req_repo.update_text(item.requirement_id, item.text)
+
+        # 3. Process active conflict resolutions
+        for res in resolutions:
+            try:
+                self.resolve_single_conflict(
+                    conflict_id=res.conflict_id,
+                    resolution_type=res.resolution_type,
+                    req_repo=req_repo,
+                    conflict_repo=conflict_repo,
+                    req_extractor=req_extractor,
+                    edited_text_a=getattr(res, "edited_text_a", None),
+                    edited_text_b=getattr(res, "edited_text_b", None),
+                    merged_text=getattr(res, "merged_text", None),
+                    user_id=user_id,
+                )
+            except Exception as exc:
+                LOGGER.warning("[RequirementThreadService] Batch conflict resolution failed for %s: %s", res.conflict_id, exc)
+
+        # 4. Clean up any remaining conflicted requirements that weren't addressed
+        remaining = req_repo.get_all_for_conflict_check(meeting_id)
+        for req in remaining:
+            if req["status"] == "conflicted":
+                req_repo.update_status(req["id"], "active")

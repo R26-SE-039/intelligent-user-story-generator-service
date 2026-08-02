@@ -31,6 +31,7 @@ class PostgresSettings:
     user_story_requirement_mapping_table: str
     acceptance_criteria_table: str
     meeting_participants_table: str
+    user_story_validations_table: str
 
     @property
     def enabled(self) -> bool:
@@ -53,12 +54,15 @@ class SpeechServiceSettings:
 class Settings(BaseSettings):
     """Runtime settings for the unified intelligent user story generator service."""
 
-    app_env: str = "dev"
+    environment: str = Field(default="development", alias="ENVIRONMENT")
+    app_name: str = Field(default="Intelligent User Story Generator", alias="APP_NAME")
+    port: int = Field(default=8001, alias="PORT")
+    frontend_url: str = Field(default="http://localhost:3000", alias="FRONTEND_URL")
+    cors_origins: str = Field(default="http://localhost:3000,http://localhost:5173", alias="CORS_ORIGINS")
 
     llm_api_key: str | None = Field(default=None, alias="LLM_API_KEY")
-    llm_api_base: str = Field(default="https://openrouter.ai/api/v1", alias="LLM_API_BASE")
-    chat_model: str = Field(default="meta-llama/llama-3.1-70b-instruct", alias="CHAT_MODEL")
-    embedding_model: str = Field(default="text-embedding-3-small", alias="EMBEDDING_MODEL")
+    chat_model: str = Field(default="gemini-2.0-flash", alias="CHAT_MODEL")
+    embedding_model: str = Field(default="models/gemini-embedding-001", alias="EMBEDDING_MODEL")
 
     chroma_persist_directory: Path = Field(default=Path("data/vector_index/chroma"), alias="CHROMA_PERSIST_DIRECTORY")
     vector_db_collection: str = Field(default="transcript_chunks", alias="VECTOR_DB_COLLECTION")
@@ -87,6 +91,7 @@ class Settings(BaseSettings):
     user_story_requirement_mapping_table: str = Field(default="user_story_requirement_mapping", alias="DB_USER_STORY_REQUIREMENT_MAPPING_TABLE")
     acceptance_criteria_table: str = Field(default="acceptance_criteria", alias="DB_ACCEPTANCE_CRITERIA_TABLE")
     meeting_participants_table: str = Field(default="meeting_participants", alias="DB_MEETING_PARTICIPANTS_TABLE")
+    user_story_validations_table: str = Field(default="user_story_validations", alias="DB_USER_STORY_VALIDATIONS_TABLE")
 
     # Azure Speech Service
     azure_speech_key: str = Field(default="", alias="AZURE_SPEECH_KEY")
@@ -131,6 +136,7 @@ def load_postgres_settings() -> PostgresSettings:
         user_story_requirement_mapping_table=s.user_story_requirement_mapping_table.strip(),
         acceptance_criteria_table=s.acceptance_criteria_table.strip(),
         meeting_participants_table=s.meeting_participants_table.strip(),
+        user_story_validations_table=s.user_story_validations_table.strip(),
     )
 
 
@@ -139,16 +145,7 @@ def load_speech_settings() -> SpeechServiceSettings:
     return SpeechServiceSettings(
         transcription_timeout_seconds=s.transcription_timeout_seconds,
         polling_interval_seconds=s.transcription_poll_interval_seconds,
-        cors_origins=[
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:5174",
-            "http://127.0.0.1:5174",
-            "http://localhost:5175",
-            "http://127.0.0.1:5175",
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-        ],
+        cors_origins=[origin.strip() for origin in s.cors_origins.split(",") if origin.strip()],
         auth_secret=s.auth_secret.strip(),
         azure_speech_key=s.azure_speech_key.strip(),
         azure_speech_region=s.azure_speech_region.strip(),
