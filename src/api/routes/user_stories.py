@@ -112,3 +112,75 @@ def generate_from_requirements(
             status_code=500,
             detail=f"Requirements Generation Failed: {str(exc)}",
         )
+
+
+class UpdateStoryRequest(BaseModel):
+    meeting_id: str
+    title: str
+    story: str
+    acceptance_criteria: list[str]
+    priority: str = "Should"
+
+
+@router.post("/user-stories/{story_id}/update")
+def update_story_endpoint(
+    story_id: str,
+    request: UpdateStoryRequest,
+    pipeline: StoryPipeline = Depends(get_story_pipeline),
+    req_extractor: RequirementExtractorService = Depends(get_requirement_extractor),
+    user_story_service: UserStoryService = Depends(get_user_story_service),
+):
+    """Update a user story and trigger mandatory backend system 5-layer re-validation.
+
+    Validation scores and status cannot be manually altered; they are 100% computed
+    by the backend validation engine against meeting evidence.
+    """
+    try:
+        return user_story_service.update_and_revalidate_story(
+            story_id=story_id,
+            meeting_id=request.meeting_id,
+            title=request.title,
+            story=request.story,
+            acceptance_criteria=request.acceptance_criteria,
+            priority=request.priority,
+            pipeline=pipeline,
+            req_extractor=req_extractor,
+        )
+    except Exception as exc:
+        LOGGER.exception("UPDATE STORY CRASH")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Story Update & Re-Validation Failed: {str(exc)}",
+        )
+
+
+class OverrideStatusRequest(BaseModel):
+    meeting_id: str
+    status: str
+    feedback: str | None = None
+
+
+@router.post("/user-stories/{story_id}/status")
+def override_story_status_endpoint(
+    story_id: str,
+    request: OverrideStatusRequest,
+    pipeline: StoryPipeline = Depends(get_story_pipeline),
+    user_story_service: UserStoryService = Depends(get_user_story_service),
+):
+    """Allow a BA/user to manually Approve, Reject, or Reset story status."""
+    try:
+        return user_story_service.override_story_status(
+            story_id=story_id,
+            status=request.status,
+            meeting_id=request.meeting_id,
+            feedback=request.feedback,
+            pipeline=pipeline,
+        )
+    except Exception as exc:
+        LOGGER.exception("STATUS OVERRIDE CRASH")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Status Override Failed: {str(exc)}",
+        )
+
+

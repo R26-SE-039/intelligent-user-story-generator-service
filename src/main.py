@@ -19,6 +19,8 @@ from src.repositories.meeting_repository import MeetingRepository
 from src.repositories.requirement_repository import RequirementRepository
 from src.repositories.transcript_repository import TranscriptRepository
 from src.repositories.conflict_repository import ConflictRepository
+from src.repositories.user_story_repository import UserStoryRepository
+from src.repositories.validation_repository import ValidationRepository
 from src.services.speech.transcription_service import TranscriptionService
 from src.services.speech.azure_client import AzureSpeechClient
 from src.services.speech.live_meeting_service import LiveMeetingService
@@ -46,6 +48,8 @@ async def lifespan(app: FastAPI):
     req_repo = RequirementRepository(gateway)
     transcript_repo = TranscriptRepository(gateway)
     conflict_repo = ConflictRepository(gateway)
+    story_repo = UserStoryRepository(gateway)
+    validation_repo = ValidationRepository(gateway)
     
     # 3. Domain Services
     transcription_service = TranscriptionService()
@@ -73,7 +77,12 @@ async def lifespan(app: FastAPI):
         transcription_service=transcription_service,
     )
     
-    story_pipeline = StoryPipeline.from_env()
+    story_pipeline = StoryPipeline.from_env(
+        transcript_repo=transcript_repo,
+        story_repo=story_repo,
+        validation_repo=validation_repo,
+    )
+
 
     # 4. Attach dependencies to app.state
     app.state.gateway = gateway

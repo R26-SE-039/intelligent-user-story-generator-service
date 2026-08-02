@@ -62,3 +62,65 @@ class UserStoryRepository:
             with conn.cursor() as cur:
                 execute_values(cur, query, values_list)
             conn.commit()
+
+    def update_story(
+        self,
+        story_id: str,
+        title: str,
+        story: str,
+        acceptance_criteria: list[str],
+        priority: str = "Should",
+    ) -> None:
+        """Update story text and replace acceptance criteria rows for a story."""
+        # 1. Update user_stories table
+        self._gateway.update(
+            self._gateway.settings.user_stories_table,
+            {
+                "title": title,
+                "story": story,
+                "priority": priority,
+            },
+            eq={"id": story_id},
+        )
+
+        # 2. Refresh acceptance_criteria rows
+        try:
+            self._gateway.delete(
+                self._gateway.settings.acceptance_criteria_table,
+                eq={"user_story_id": story_id},
+            )
+        except Exception:
+            pass
+
+        ac_rows = [
+            {
+                "id": str(uuid4()),
+                "user_story_id": story_id,
+                "criteria": ac,
+            }
+            for ac in acceptance_criteria
+            if ac.strip()
+        ]
+        if ac_rows:
+            self._gateway.upsert(
+                self._gateway.settings.acceptance_criteria_table,
+                ac_rows,
+                on_conflict="id",
+            )
+
+    def get_by_id(self, story_id: str) -> dict | None:
+        """Fetch user story row with acceptance criteria."""
+        stories = self._gateway.select(
+            self._gateway.settings.user_stories_table,
+            eq={"id": story_id},
+        )
+        if not stories:
+            return None
+        story_row = dict(stories[0])
+        ac_rows = self._gateway.select(
+            self._gateway.settings.acceptance_criteria_table,
+            eq={"user_story_id": story_id},
+        )
+        story_row["acceptance_criteria"] = [r["criteria"] for r in ac_rows if r.get("criteria")]
+        return story_row
+

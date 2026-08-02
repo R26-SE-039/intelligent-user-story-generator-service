@@ -104,6 +104,22 @@ class ValidationRepository:
             LOGGER.error("[ValidationRepository] get_by_story_id failed: %s", exc)
             return None
 
+    def update_status(self, story_id: str, status: str, recommendation: str | None = None) -> None:
+        """Update BA decision status for a user story validation record."""
+        try:
+            update_data = {"status": status}
+            if recommendation:
+                update_data["recommendation"] = recommendation
+            self._gateway.update(
+                self._table,
+                update_data,
+                eq={"user_story_id": story_id},
+            )
+            LOGGER.info("[ValidationRepository] Updated status for story %s to %s", story_id, status)
+        except Exception as exc:
+            LOGGER.error("[ValidationRepository] update_status failed: %s", exc)
+
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------

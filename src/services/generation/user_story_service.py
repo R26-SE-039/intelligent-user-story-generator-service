@@ -109,19 +109,21 @@ class UserStoryService:
         all_issues = [issue for vr in validation_results for issue in vr.issues]
 
         # --- 5. Persist stories, mappings, and validation results ---
-        pipeline.story_repo.save(stories=batch.stories, meeting_id=meeting_id)
+        if pipeline.story_repo is not None:
+            pipeline.story_repo.save(stories=batch.stories, meeting_id=meeting_id)
 
-        mappings = [
-            {"user_story_id": story.story_id, "requirement_id": req_id}
-            for story in batch.stories
-            for req_id in story.evidence_refs
-            if any(r["id"] == req_id for r in active_reqs)
-        ]
-        if mappings:
-            pipeline.story_repo.save_requirement_mappings(mappings)
+            mappings = [
+                {"user_story_id": story.story_id, "requirement_id": req_id}
+                for story in batch.stories
+                for req_id in story.evidence_refs
+                if any(r["id"] == req_id for r in active_reqs)
+            ]
+            if mappings:
+                pipeline.story_repo.save_requirement_mappings(mappings)
 
-        if validation_results:
+        if pipeline.validation_repo is not None and validation_results:
             pipeline.validation_repo.save(validation_results)
+
 
         # --- 6. Return response ---
         return {
@@ -131,6 +133,111 @@ class UserStoryService:
             "issues": [issue.model_dump() for issue in all_issues],
             "validation_results": [vr.model_dump() for vr in validation_results],
         }
+
+    def update_and_revalidate_story(
+        self,
+        *,
+        story_id: str,
+        meeting_id: str,
+        title: str,
+        story: str,
+        acceptance_criteria: list[str],
+        priority: str = "Should",
+        pipeline: StoryPipeline,
+        req_extractor: RequirementExtractorService,
+    ) -> dict:
+        """Update story text and automatically re-run 5-Layer validation.
+
+        The quality score and status are 100% system-calculated by the validation engine.
+        Users cannot manually supply or override scores.
+        """
+        if pipeline.story_repo is not None:
+            pipeline.story_repo.update_story(
+                story_id=story_id,
+                title=title,
+                story=story,
+                acceptance_criteria=acceptance_criteria,
+                priority=priority,
+            )
+
+        # Build GeneratedStory instance for validation
+        from src.models.user_story import GeneratedStory, StoryBatch
+        updated_story = GeneratedStory(
+            story_id=story_id,
+            title=title,
+            story=story,
+            acceptance_criteria=acceptance_criteria,
+            priority=priority if priority in ("Must", "Should", "Could") else "Should",
+            confidence=0.95,
+            status="ready",
+            evidence_refs=[],
+        )
+        batch = StoryBatch(stories=[updated_story])
+
+        # Retrieve meeting evidence
+        evidence_chunks = self._retrieve_evidence(
+            meeting_id=meeting_id,
+            active_reqs=[{"requirement_text": f"{title} {story}"}],
+            pipeline=pipeline,
+            req_extractor=req_extractor,
+        )
+
+        # Mandatory system 5-layer re-validation
+        validation_results = pipeline.validation_engine.validate_batch(batch, evidence_chunks)
+
+        if pipeline.validation_repo is not None and validation_results:
+            pipeline.validation_repo.save(validation_results)
+
+        vr_dict = validation_results[0].model_dump() if validation_results else {}
+
+        LOGGER.info(
+            "[UserStoryService] Re-validated story %s: score=%.1f, status=%s",
+            story_id,
+            vr_dict.get("overall_quality_score", 0),
+            vr_dict.get("status", "Needs Review"),
+        )
+
+        return {
+            "status": "success",
+            "meeting_id": meeting_id,
+            "story": updated_story.model_dump(),
+            "validation_result": vr_dict,
+        }
+
+    def override_story_status(
+        self,
+        *,
+        story_id: str,
+        status: str,
+        meeting_id: str,
+        feedback: str | None = None,
+        pipeline: StoryPipeline,
+    ) -> dict:
+        """Allow a BA to manually Approve, Reject, or Reset a story status."""
+        valid_statuses = ("Approved", "Needs Review", "Rejected")
+        target_status = status if status in valid_statuses else "Needs Review"
+
+        if pipeline.validation_repo is not None:
+            pipeline.validation_repo.update_status(
+                story_id=story_id,
+                status=target_status,
+                recommendation=feedback,
+            )
+
+        LOGGER.info(
+            "[UserStoryService] BA manual override for story %s: status=%s",
+            story_id,
+            target_status,
+        )
+
+        return {
+            "status": "success",
+            "meeting_id": meeting_id,
+            "story_id": story_id,
+            "new_status": target_status,
+        }
+
+
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -164,14 +271,30 @@ class UserStoryService:
                 meeting_id,
             )
             if not chunks:
-                LOGGER.warning(
-                    "[UserStoryService] No utterance embeddings found for meeting %s.",
+                LOGGER.info(
+                    "[UserStoryService] No utterance embeddings found for meeting %s — attempting DB fallback.",
+                    meeting_id,
+                )
+                fallback_rows = pipeline.transcript_repo.get_requirement_utterances_by_meeting(meeting_id)
+                chunks = _utterances_to_chunks(fallback_rows)
+                LOGGER.info(
+                    "[UserStoryService] Fallback DB retrieved %d utterance chunk(s) for meeting %s.",
+                    len(chunks),
                     meeting_id,
                 )
             return chunks
         except Exception as exc:
             LOGGER.warning(
-                "[UserStoryService] pgvector retrieval failed (%s) — proceeding without evidence.",
+                "[UserStoryService] pgvector retrieval failed (%s) — attempting DB fallback.",
                 exc,
             )
-            return []
+            try:
+                fallback_rows = pipeline.transcript_repo.get_requirement_utterances_by_meeting(meeting_id)
+                return _utterances_to_chunks(fallback_rows)
+            except Exception as fb_exc:
+                LOGGER.warning(
+                    "[UserStoryService] DB fallback retrieval also failed (%s) — proceeding without evidence.",
+                    fb_exc,
+                )
+                return []
+

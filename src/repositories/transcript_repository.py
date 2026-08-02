@@ -169,3 +169,43 @@ class TranscriptRepository:
                 "[TranscriptRepository] find_relevant_utterances failed: %s", exc
             )
             return []
+
+    def get_requirement_utterances_by_meeting(
+        self,
+        meeting_id: str,
+        limit: int = 15,
+    ) -> list[dict]:
+        """Fetch utterances belonging to a meeting directly from DB as a fallback.
+
+        Used when vector embeddings are missing or pgvector search returns no results.
+        Returns rows ordered by start_time.
+        """
+        query = """
+            SELECT
+                tu.id,
+                tu.transcript_id,
+                tu.utterance_text,
+                tu.speaker_name,
+                tu.start_time,
+                tu.end_time,
+                tu.utterance_type
+            FROM transcript_utterances tu
+            JOIN transcripts t ON t.id = tu.transcript_id
+            WHERE t.meeting_id = %s
+              AND tu.utterance_text IS NOT NULL
+              AND tu.utterance_text != ''
+            ORDER BY tu.start_time ASC NULLS LAST
+            LIMIT %s;
+        """
+        try:
+            from psycopg2.extras import RealDictCursor
+            with self._gateway._get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute(query, (meeting_id, limit))
+                    return [dict(row) for row in cur.fetchall()]
+        except Exception as exc:
+            LOGGER.warning(
+                "[TranscriptRepository] get_requirement_utterances_by_meeting failed: %s", exc
+            )
+            return []
+

@@ -34,17 +34,30 @@ class StoryPipeline:
     @classmethod
     def from_env(
         cls,
-        transcript_repo: "TranscriptRepository | None" = None,
-        story_repo: "UserStoryRepository | None" = None,
-        validation_repo: "ValidationRepository | None" = None,
-    ) -> "StoryPipeline":
-        """Instantiate StoryPipeline from environment settings."""
+        transcript_repo: TranscriptRepository | None = None,
+        story_repo: UserStoryRepository | None = None,
+        validation_repo: ValidationRepository | None = None,
+    ) -> StoryPipeline:
+        """Instantiate StoryPipeline from environment settings with fallback Postgres repos."""
+        try:
+            from src.db.postgres import PostgresGateway
+            gateway = PostgresGateway.from_env()
+            if transcript_repo is None:
+                transcript_repo = TranscriptRepository(gateway)
+            if story_repo is None:
+                story_repo = UserStoryRepository(gateway)
+            if validation_repo is None:
+                validation_repo = ValidationRepository(gateway)
+        except Exception as exc:
+            LOGGER.warning("[StoryPipeline] Could not initialize default Postgres repositories: %s", exc)
+
         return cls(
             settings=Settings(),
             transcript_repo=transcript_repo,
             story_repo=story_repo,
             validation_repo=validation_repo,
         )
+
 
     def __init__(
         self, 
