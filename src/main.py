@@ -112,7 +112,7 @@ app = FastAPI(title=settings.app_name, version="1.0.0", lifespan=lifespan)
 # --- Middleware Setup ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()] if settings.cors_origins else ["*"],
+    allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()] or ["http://localhost:8080"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
