@@ -11,6 +11,7 @@ from src.repositories.meeting_repository import MeetingRepository
 from src.repositories.requirement_repository import RequirementRepository
 from src.repositories.transcript_repository import TranscriptRepository
 from src.repositories.conflict_repository import ConflictRepository
+from src.repositories.user_story_repository import UserStoryRepository
 from src.services.speech.transcription_service import TranscriptionService
 from src.services.speech.azure_client import AzureSpeechClient
 from src.services.speech.live_meeting_service import LiveMeetingService
@@ -36,6 +37,9 @@ def get_current_user(authorization: str | None = Header(None)) -> dict[str, Any]
 
 
 # --- Dependency Providers Reading from app.state ---
+
+def get_settings(request: Request) -> Settings:
+    return request.app.state.settings
 
 def get_gateway(request: Request) -> PostgresGateway:
     return request.app.state.gateway
@@ -96,3 +100,6 @@ def get_story_pipeline(request: Request) -> StoryPipeline:
 def get_user_story_service() -> UserStoryService:
     """Return a shared UserStoryService instance (stateless, safe to construct per-request)."""
     return UserStoryService()
+
+def get_user_story_repo(request: Request) -> UserStoryRepository:
+    return request.app.state.story_repo

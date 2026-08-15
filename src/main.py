@@ -100,6 +100,8 @@ async def lifespan(app: FastAPI):
     app.state.live_meeting_service = live_meeting_service
     app.state.meeting_coordinator = meeting_coordinator
     app.state.story_pipeline = story_pipeline
+    app.state.story_repo = story_repo
+    app.state.settings = settings
 
     yield
 

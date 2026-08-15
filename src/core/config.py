@@ -107,6 +107,9 @@ class Settings(BaseSettings):
     transcription_timeout_seconds: int = Field(default=120, alias="TRANSCRIPTION_TIMEOUT_SECONDS")
     transcription_poll_interval_seconds: float = Field(default=1.2, alias="TRANSCRIPTION_POLL_INTERVAL_SECONDS")
 
+    # Auth Service integration
+    auth_service_url: str = Field(default="http://localhost:3001", alias="AUTH_SERVICE_URL")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

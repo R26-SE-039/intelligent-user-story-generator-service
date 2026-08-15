@@ -42,26 +42,46 @@ class PostgresGateway:
 
     def run_migrations(self) -> None:
         """Run idempotent database migrations to ensure required schema columns exist."""
-        migration_sql = """
-        ALTER TABLE conflicts 
-            ADD COLUMN IF NOT EXISTS source_meeting_id UUID REFERENCES meetings(id) ON DELETE SET NULL,
-            ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active',
-            ADD COLUMN IF NOT EXISTS suggested_resolution TEXT,
-            ADD COLUMN IF NOT EXISTS previous_text_a TEXT,
-            ADD COLUMN IF NOT EXISTS previous_text_b TEXT,
-            ADD COLUMN IF NOT EXISTS resolved_by UUID,
-            ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;
+        migrations = [
+            """
+            ALTER TABLE meetings 
+                ADD COLUMN IF NOT EXISTS iteration_id UUID;
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_meetings_iteration_id ON meetings(iteration_id);
+            """,
+            """
+            ALTER TABLE conflicts 
+                ADD COLUMN IF NOT EXISTS source_meeting_id UUID REFERENCES meetings(id) ON DELETE SET NULL,
+                ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active',
+                ADD COLUMN IF NOT EXISTS suggested_resolution TEXT,
+                ADD COLUMN IF NOT EXISTS previous_text_a TEXT,
+                ADD COLUMN IF NOT EXISTS previous_text_b TEXT,
+                ADD COLUMN IF NOT EXISTS resolved_by UUID,
+                ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;
+            """,
+            """
+            ALTER TABLE requirements 
+                ADD COLUMN IF NOT EXISTS duplicate_of_id UUID REFERENCES requirements(id) ON DELETE SET NULL;
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_req_embeddings_vector 
+                ON requirement_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+            """
+        ]
+        
+        import logging
+        logger = logging.getLogger(__name__)
 
-        ALTER TABLE requirements 
-            ADD COLUMN IF NOT EXISTS duplicate_of_id UUID REFERENCES requirements(id) ON DELETE SET NULL;
-
-        CREATE INDEX IF NOT EXISTS idx_req_embeddings_vector 
-            ON requirement_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-        """
         with self._get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(migration_sql)
-            conn.commit()
+                for sql in migrations:
+                    try:
+                        cur.execute(sql)
+                        conn.commit()
+                    except Exception as e:
+                        conn.rollback()
+                        logger.warning(f"[PostgresGateway] Migration statement failed: {e}")
 
 
     def _get_connection(self):

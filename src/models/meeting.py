@@ -28,6 +28,7 @@ class MeetingResponse(BaseModel):
     status: str
     meeting_id: str
     project_id: str | None = None
+    iteration_id: str | None = None
     passcode: str
     invite_link: str
     name: str | None = None

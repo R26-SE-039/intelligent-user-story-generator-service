@@ -2,7 +2,7 @@
 
 import uuid
 import logging
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form, Header
 from pydantic import BaseModel
 
 from src.models.schemas import (
@@ -20,7 +20,14 @@ from src.api.dependencies import (
     get_requirement_extractor,
     get_requirement_repo,
     get_user_story_service,
+    get_current_user,
+    get_settings,
+    get_meeting_repo,
 )
+from src.core.config import Settings
+from src.repositories.meeting_repository import MeetingRepository
+from src.utils.helpers import utc_now
+from src.services.auth_client import fetch_active_iteration
 from src.core.logger import get_logger
 
 router = APIRouter()
@@ -50,8 +57,13 @@ async def pipeline_upload(
     file: UploadFile = File(...),
     query: str = Form("Generate user stories based on this transcript"),
     project_id: str | None = Form(None),
+    organization_id: str | None = Form(None),
     pipeline: StoryPipeline = Depends(get_story_pipeline),
     transcription_service: TranscriptionService = Depends(get_transcription_service),
+    meeting_repo: MeetingRepository = Depends(get_meeting_repo),
+    user: dict = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+    authorization: str | None = Header(None),
 ) -> PipelineRunResponse:
     """Upload a raw .txt transcript and run the pipeline."""
     if not file.filename.endswith(".txt"):
@@ -61,7 +73,34 @@ async def pipeline_upload(
         content = await file.read()
         text = content.decode("utf-8")
 
-        transcript_id = f"upload-{uuid.uuid4().hex[:8]}"
+        # Create a real meeting record for this upload
+        meeting_id = str(uuid.uuid4())
+
+        # Auto-resolve active iteration (same as meeting create)
+        iteration_id = None
+        if project_id:
+            iteration = await fetch_active_iteration(
+                project_id=project_id,
+                jwt_token=authorization,
+                auth_service_url=settings.auth_service_url,
+            )
+            iteration_id = iteration["id"] if iteration else None
+
+        # Save virtual meeting to meetings table
+        meeting_repo.save_meeting({
+            "id": meeting_id,
+            "organization_id": user.get("organization_id") or organization_id,
+            "project_id": project_id,
+            "iteration_id": iteration_id,
+            "host_id": user.get("id"),
+            "title": f"Uploaded Transcript: {file.filename}",
+            "status": "completed",
+            "start_time": utc_now(),
+            "end_time": utc_now(),
+        })
+
+        # Run pipeline with real meeting_id as transcript_id
+        transcript_id = meeting_id
         transcript = transcription_service.parse_raw_text(text, transcript_id)
         transcript.project_id = project_id
 

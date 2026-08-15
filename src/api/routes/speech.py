@@ -5,7 +5,8 @@ import random
 import string
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, Header
+from fastapi.requests import Request
 
 from src.models.meeting import (
     MeetingCreateRequest,
@@ -25,9 +26,11 @@ from src.api.dependencies import (
     get_requirement_extractor,
     get_requirement_thread_service,
     get_live_meeting_service,
+    get_settings,
 )
-from src.core.config import SpeechServiceSettings
+from src.core.config import SpeechServiceSettings, Settings
 from src.utils.helpers import utc_now
+from src.services.auth_client import fetch_active_iteration
 from src.services.speech.transcription_service import TranscriptionService
 from src.services.speech.live_meeting_service import LiveMeetingService
 from src.services.speech.live_meeting_coordinator import LiveMeetingCoordinator
@@ -49,20 +52,32 @@ def health() -> dict[str, str]:
 
 
 @router.post("/meeting/create", response_model=MeetingResponse)
-def create_meeting(
+async def create_meeting(
     body: MeetingCreateRequest,
     user: dict = Depends(get_current_user),
     meeting_repo: MeetingRepository = Depends(get_meeting_repo),
     transcription_service: TranscriptionService = Depends(get_transcription_service),
     settings: SpeechServiceSettings = Depends(get_speech_settings),
+    app_settings: Settings = Depends(get_settings),
+    authorization: str | None = Header(None),
 ) -> MeetingResponse:
     meeting_id = str(uuid.uuid4())
     passcode = ''.join(random.choices(string.digits, k=6))
     
+    iteration_id = None
+    if body.project_id and authorization:
+        iteration = await fetch_active_iteration(
+            project_id=body.project_id,
+            jwt_token=authorization,
+            auth_service_url=app_settings.auth_service_url,
+        )
+        iteration_id = iteration["id"] if iteration else None
+        
     meeting_data = {
         "id": meeting_id,
         "organization_id": user.get("organization_id"),
         "project_id": body.project_id,
+        "iteration_id": iteration_id,
         "host_id": user["id"],
         "title": body.name,
         "status": "active",
@@ -80,6 +95,7 @@ def create_meeting(
         status="success",
         meeting_id=meeting_id,
         project_id=body.project_id,
+        iteration_id=iteration_id,
         passcode=passcode,
         invite_link=invite_link,
         name=body.name
@@ -309,6 +325,31 @@ def get_project_conflicts(
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+
+@router.get("/project/{project_id}/iteration/stories")
+async def get_iteration_stories(
+    project_id: str,
+    user: dict = Depends(get_current_user),
+    app_settings: Settings = Depends(get_settings),
+    authorization: str | None = Header(None),
+    request: Request = None,
+):
+    iteration = await fetch_active_iteration(
+        project_id=project_id,
+        jwt_token=authorization,
+        auth_service_url=app_settings.auth_service_url,
+    )
+    if not iteration:
+        raise HTTPException(status_code=404, detail="No active iteration for this project")
+        
+    user_story_repo = request.app.state.story_repo
+    stories = user_story_repo.get_stories_by_iteration(iteration["id"])
+    
+    return {
+        "iteration": iteration,
+        "stories": stories,
+        "total_stories": len(stories),
+    }
 
 @router.websocket("/ws/{meeting_id}")
 async def websocket_endpoint(

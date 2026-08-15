@@ -14,7 +14,8 @@ CREATE TABLE meetings (
     start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     end_time TIMESTAMP,
     status VARCHAR(50),
-    audio_url TEXT
+    audio_url TEXT,
+    iteration_id UUID
 );
 
 -- Table: CHAT_MESSAGES
@@ -160,6 +161,7 @@ CREATE TABLE acceptance_criteria (
 -- Indexes
 -- -----------------------------------------------------------------------------
 CREATE INDEX idx_meetings_project_id ON meetings(project_id);
+CREATE INDEX idx_meetings_iteration_id ON meetings(iteration_id);
 CREATE INDEX idx_chat_messages_meeting_id ON chat_messages(meeting_id);
 CREATE INDEX idx_transcripts_meeting_id ON transcripts(meeting_id);
 CREATE INDEX idx_meeting_participants_meeting_id ON meeting_participants(meeting_id);
