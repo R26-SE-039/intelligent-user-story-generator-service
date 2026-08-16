@@ -18,10 +18,12 @@ from threading import Lock
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
+from src.core.config import Settings
+
 LOGGER = logging.getLogger(__name__)
 
-# Absolute path to the model directory relative to this file
-_MODEL_DIR = (
+# Absolute path to the default model directory relative to service root
+_DEFAULT_MODEL_DIR = (
     Path(__file__).resolve().parent.parent.parent.parent
     / "models"
     / "modernbert-utterance-classifier"
@@ -61,13 +63,26 @@ class UtteranceClassifier:
 
     def _load_model(self) -> None:
         """Load the fine-tuned ModernBERT model and tokenizer from disk."""
-        model_path = str(_MODEL_DIR)
+        service_root = Path(__file__).resolve().parent.parent.parent.parent
+        configured_path = Path(Settings().modernbert_model_path)
+
+        if configured_path.is_absolute():
+            model_dir = configured_path
+        else:
+            model_dir = (service_root / configured_path).resolve()
+
+        if not model_dir.exists():
+            fallback_dir = (service_root.parent / "ModernBERT Traning" / "model_output" / "checkpoint-1350").resolve()
+            if fallback_dir.exists():
+                model_dir = fallback_dir
+
+        model_path = str(model_dir)
         LOGGER.info("[UtteranceClassifier] Loading model from: %s", model_path)
 
-        if not _MODEL_DIR.exists():
+        if not model_dir.exists():
             raise FileNotFoundError(
                 f"ModernBERT model directory not found at: {model_path}\n"
-                "Please ensure 'models/modernbert-utterance-classifier/' exists "
+                "Please ensure 'models/modernbert-utterance-classifier/' or 'ModernBERT Traning/model_output/checkpoint-1350' exists "
                 "with config.json, model.safetensors, tokenizer.json files."
             )
 
@@ -115,11 +130,21 @@ class UtteranceClassifier:
             confidence = probabilities[0][predicted_id].item()
 
         label = self.model.config.id2label[predicted_id]
+        conf_pct = round(confidence * 100, 2)
+        is_req = label in REQUIREMENT_LABELS
+
+        LOGGER.info(
+            "[ModernBERT Classification] Input: '%s...' -> Label: %s (Confidence: %.1f%%, IsRequirement: %s)",
+            text[:70].replace("\n", " "),
+            label,
+            conf_pct,
+            is_req
+        )
 
         return ClassificationResult(
             label=label,
             confidence=round(confidence, 4),
-            is_requirement=label in REQUIREMENT_LABELS,
+            is_requirement=is_req,
         )
 
     def classify_batch(self, texts: list[str]) -> list[ClassificationResult]:
@@ -152,11 +177,21 @@ class UtteranceClassifier:
         for i, pred_id in enumerate(predicted_ids):
             label = self.model.config.id2label[pred_id]
             confidence = probabilities[i][pred_id].item()
+            is_req = label in REQUIREMENT_LABELS
+            LOGGER.info(
+                "[ModernBERT Classification Batch] Item %d/%d: '%s...' -> Label: %s (Confidence: %.1f%%, IsRequirement: %s)",
+                i + 1,
+                len(texts),
+                texts[i][:60].replace("\n", " "),
+                label,
+                round(confidence * 100, 1),
+                is_req
+            )
             results.append(
                 ClassificationResult(
                     label=label,
                     confidence=round(confidence, 4),
-                    is_requirement=label in REQUIREMENT_LABELS,
+                    is_requirement=is_req,
                 )
             )
 

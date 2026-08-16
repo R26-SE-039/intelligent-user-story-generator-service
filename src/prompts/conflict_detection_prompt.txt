@@ -1,15 +1,20 @@
-Analyze if the NEW requirement conflicts with each of the numbered EXISTING requirements.
-A conflict is a logical contradiction (e.g. bypass queue vs follow queue, real-time speed vs validation delay, open access vs restricted records).
+Analyze if the NEW requirement has a genuine LOGICAL CONFLICT or DUPLICATE with each numbered EXISTING requirement.
+
+CRITICAL GUIDELINES:
+1. DUPLICATE FIRST RULE: If the new requirement expresses the same underlying business rule, feature, or workflow step as an existing requirement (even if phrased differently or broken into smaller steps), set "conflict": true, "conflict_type": "duplicate", "suggested_resolution": null.
+2. DIRECT LOGICAL CONTRADICTION ONLY: Set "conflict": true, "conflict_type": "functional"|"operational"|"non_functional" ONLY if there is an explicit, direct logical impossibility (e.g. Requirement A mandates payment before order confirmation, but Requirement B forbids payment before order confirmation or allows free reservation for everyone without exception). Provide a single-sentence "suggested_resolution".
+3. COMPLEMENTARY FEATURES ARE NOT CONFLICTS: If two requirements describe different capabilities of the system (e.g. order cancellation vs inventory release), set {"conflict": false, "conflict_type": null, "severity": null, "explanation": "Complementary feature", "suggested_resolution": null}.
+4. DEFAULT TO NO CONFLICT: If they do not directly contradict, set {"conflict": false, "conflict_type": null, "severity": null, "explanation": "No contradiction", "suggested_resolution": null}.
 
 JSON Response format:
 [
   {
     "conflict": true,
-    "conflict_type": "functional"|"operational"|"non_functional"|"scope"|"temporal"|"access_control"|"priority",
+    "conflict_type": "functional"|"duplicate"|"operational"|"non_functional"|"scope"|"temporal"|"access_control",
     "severity": "high"|"medium"|"low",
-    "explanation": "Why they conflict (1 sentence)"
+    "explanation": "Brief 1-sentence reason",
+    "suggested_resolution": "A proposed single-sentence merged requirement statement (null if duplicate)"
   }
 ]
-If no conflict: {"conflict": false, "conflict_type": null, "severity": null, "explanation": "No contradiction"}
 
 Respond ONLY with raw JSON array matching the numbered list order. No markdown.

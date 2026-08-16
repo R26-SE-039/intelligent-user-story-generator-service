@@ -15,13 +15,12 @@ from src.models.user_story import GeneratedStory, StoryBatch
 class StoryGenerator:
     """Generate user stories using an LLM with deterministic fallback for local runs."""
 
-    def __init__(self, api_key: str | None = None, api_base: str | None = None, model: str = "gpt-4o-mini") -> None:
-        """Initialize StoryGenerator with an LLM client."""
+    def __init__(self, api_key: str | None = None, api_base: str | None = None, model: str = "gemini-2.0-flash") -> None:
+        """Initialize StoryGenerator with a Gemini GenAI client."""
         settings = Settings()
         if api_key:
             settings.llm_api_key = api_key
-        if api_base:
-            settings.llm_api_base = api_base
+        # api_base is accepted but ignored — the system uses google.genai exclusively
         
         self.client = get_llm_client(settings)
         self.model = model

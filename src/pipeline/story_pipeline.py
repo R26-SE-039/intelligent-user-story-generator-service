@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-import logging
-
 from src.core.config import Settings
 from src.core.logger import get_logger
-from src.db.postgres import PostgresGateway
 from src.db.chroma import ChromaVectorStore
 from src.repositories.embedding_repository import EmbeddingRepository
 from src.repositories.user_story_repository import UserStoryRepository
 from src.repositories.transcript_repository import TranscriptRepository
+from src.repositories.validation_repository import ValidationRepository
 from src.services.speech.transcription_service import TranscriptionService
 from src.services.retrieval.chroma_service import ChromaService
 from src.services.retrieval.retriever import Retriever
 from src.services.generation.story_generator import StoryGenerator
-from src.services.generation.story_validator import validate_stories
+from src.services.generation.validation import ValidationEngine
 from src.services.requirement.utterance_classifier import UtteranceClassifier
 from src.services.requirement.context_builder import ContextBuilder
 
@@ -33,15 +31,45 @@ LOGGER = get_logger(__name__)
 class StoryPipeline:
     """Pipeline that performs transcript chunking, retrieval, and story generation."""
 
+    @classmethod
+    def from_env(
+        cls,
+        transcript_repo: TranscriptRepository | None = None,
+        story_repo: UserStoryRepository | None = None,
+        validation_repo: ValidationRepository | None = None,
+    ) -> StoryPipeline:
+        """Instantiate StoryPipeline from environment settings with fallback Postgres repos."""
+        try:
+            from src.db.postgres import PostgresGateway
+            gateway = PostgresGateway.from_env()
+            if transcript_repo is None:
+                transcript_repo = TranscriptRepository(gateway)
+            if story_repo is None:
+                story_repo = UserStoryRepository(gateway)
+            if validation_repo is None:
+                validation_repo = ValidationRepository(gateway)
+        except Exception as exc:
+            LOGGER.warning("[StoryPipeline] Could not initialize default Postgres repositories: %s", exc)
+
+        return cls(
+            settings=Settings(),
+            transcript_repo=transcript_repo,
+            story_repo=story_repo,
+            validation_repo=validation_repo,
+        )
+
+
     def __init__(
         self, 
         settings: Settings, 
         transcript_repo: TranscriptRepository | None = None,
-        story_repo: UserStoryRepository | None = None
+        story_repo: UserStoryRepository | None = None,
+        validation_repo: ValidationRepository | None = None,
     ) -> None:
         self.settings = settings
         self.transcript_repo = transcript_repo
         self.story_repo = story_repo
+        self.validation_repo = validation_repo
         
         self.vector_store = ChromaVectorStore(settings)
         self.embedding_repo = EmbeddingRepository(self.vector_store)
@@ -51,23 +79,20 @@ class StoryPipeline:
         self.transcription_service = TranscriptionService()
         self.story_generator = StoryGenerator(
             api_key=settings.llm_api_key,
-            api_base=settings.llm_api_base,
+            api_base=None,
             model=settings.chat_model
+        )
+
+        # Validation engine — reuses the same genai client as the RAG pipeline
+        self.validation_engine = ValidationEngine(
+            genai_client=self.vector_store.genai_client,
+            model=settings.chat_model,
         )
 
         # ModernBERT utterance classifier — loaded once as a singleton
         self.utterance_classifier = UtteranceClassifier()
         self.context_builder = ContextBuilder()
 
-    @classmethod
-    def from_env(cls) -> "StoryPipeline":
-        settings = Settings()
-        gateway = PostgresGateway.from_env()
-        return cls(
-            settings,
-            transcript_repo=TranscriptRepository(gateway),
-            story_repo=UserStoryRepository(gateway)
-        )
 
     def ingest_transcript(self, transcript: Transcript):
         """Return processed transcript chunks without indexing."""
@@ -96,29 +121,37 @@ class StoryPipeline:
         transcript_id: str | None = None,
         project_id: str | None = None,
     ) -> GenerateStoriesResponse:
-        """Retrieve evidence and generate validated stories."""
+        """Retrieve evidence and generate + validate stories."""
         top_k = request.top_k or self.settings.retrieval_top_k
         evidence = self.retriever.retrieve(request.query, top_k=top_k, filters=request.filters)
         if not evidence:
             raise ValueError("No evidence found for query. Index transcripts first or adjust filters.")
 
         batch = self.story_generator.generate(query=request.query, evidence=evidence)
-        issues = validate_stories(batch)
+
+        # 5-layer validation
+        validation_results = self.validation_engine.validate_batch(batch, evidence)
+
+        # Flatten issues from all validation results for the legacy issues field
+        all_issues = [issue for vr in validation_results for issue in vr.issues]
+
         response = GenerateStoriesResponse(
             query=request.query,
             stories=batch.stories,
-            issues=issues,
+            issues=all_issues,
             evidence_chunk_ids=[item.chunk_id for item in evidence],
+            validation_results=validation_results,
         )
         if self.story_repo is not None:
             self.story_repo.save(
                 stories=response.stories,
-                meeting_id=transcript_id
+                meeting_id=transcript_id,
             )
+
+        if self.validation_repo is not None and validation_results:
+            self.validation_repo.save(validation_results)
         return response
 
-    def generate_stories(self, request: GenerateStoriesRequest) -> GenerateStoriesResponse:
-        return self._generate_stories(request)
 
     def run(self, request: PipelineRunRequest) -> PipelineRunResponse:
         """Run classify + index + retrieve + generate in a single operation."""
@@ -176,4 +209,5 @@ class StoryPipeline:
             stories=generation.stories,
             issues=generation.issues,
             evidence_chunk_ids=generation.evidence_chunk_ids,
+            validation_results=generation.validation_results,
         )

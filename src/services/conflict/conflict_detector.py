@@ -15,23 +15,13 @@ from src.models.requirement import Requirement
 
 # Maximum number of existing requirements to send to the LLM in one call.
 # Prevents the context window from becoming too large.
-MAX_CANDIDATES = 5
+MAX_CANDIDATES = 10
 
 
 class ConflictDetectorService:
     """
-    Detects conflicts between a newly extracted requirement and ALL existing ones
-    in the same meeting using direct LLM-based logical contradiction checking.
-
-    NOTE: The previous two-stage pipeline (pgvector similarity → LLM) was replaced
-    because the system uses hash-based fallback embeddings (not semantic embeddings)
-    when OpenRouter is the LLM provider. Hash embeddings have no semantic meaning,
-    so cosine distance between related requirements was always > threshold, meaning
-    zero candidates ever reached the LLM.
-
-    The new pipeline:
-      1. Fetch ALL requirements from this meeting (excluding the new one) from DB.
-      2. Pass them directly to the LLM for logical contradiction verification.
+    Detects conflicts between a newly extracted requirement and existing ones
+    in the meeting or project using direct LLM-based logical contradiction checking.
     """
 
     def __init__(self) -> None:
@@ -48,21 +38,22 @@ class ConflictDetectorService:
     ) -> list[Conflict]:
         """
         Ask the LLM to check which of the candidate requirements conflict with
-        the new requirement. Returns confirmed Conflict objects only.
+        the new requirement. Returns confirmed Conflict objects with suggested resolutions.
         """
         if not candidates or not self.client:
             return []
 
         system_prompt = self._load_prompt("conflict_detection_prompt.txt")
 
-        # Format the user message: new requirement + numbered list of all existing ones
-        candidate_lines = "\n".join(
-            f"{i + 1}. [{c['requirement_type']}] {c['requirement_text']}"
-            for i, c in enumerate(candidates)
-        )
+        # Format candidate lines with meeting context if cross-meeting
+        candidate_lines = []
+        for i, c in enumerate(candidates):
+            m_ctx = f" [Meeting: {c['meeting_title']}]" if c.get("meeting_title") else ""
+            candidate_lines.append(f"{i + 1}. [{c['requirement_type']}]{m_ctx} {c['requirement_text']}")
+
         user_message = (
             f"NEW REQUIREMENT:\n[{new_req.requirement_type}] {new_req.requirement_text}\n\n"
-            f"EXISTING REQUIREMENTS TO CHECK:\n{candidate_lines}"
+            f"EXISTING REQUIREMENTS TO CHECK:\n" + "\n".join(candidate_lines)
         )
 
         try:
@@ -79,12 +70,17 @@ class ConflictDetectorService:
             content = interaction.output_text.strip()
             print(f"[ConflictDetector] LLM raw response: {content[:300]}")
 
-            # Strip any accidental markdown fences
-            if content.startswith("```"):
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
-            content = content.strip()
+            # Extract JSON array substring between first '[' and last ']'
+            start_idx = content.find("[")
+            end_idx = content.rfind("]")
+            if start_idx != -1 and end_idx != -1:
+                content = content[start_idx : end_idx + 1]
+            else:
+                if content.startswith("```"):
+                    content = content.split("```")[1]
+                    if content.startswith("json"):
+                        content = content[4:]
+                content = content.strip()
 
             results = json.loads(content)
 
@@ -94,6 +90,8 @@ class ConflictDetectorService:
                     break
                 if result.get("conflict"):
                     candidate = candidates[i]
+                    source_m_id = candidate.get("meeting_id") if candidate.get("meeting_id") != new_req.meeting_id else None
+                    source_title = candidate.get("meeting_title") if source_m_id else None
                     conflicts.append(
                         Conflict(
                             conflict_id=str(uuid4()),
@@ -102,6 +100,12 @@ class ConflictDetectorService:
                             conflict_type=result.get("conflict_type", "functional"),
                             severity=result.get("severity", "medium"),
                             explanation=result.get("explanation", ""),
+                            source_meeting_id=source_m_id,
+                            source_meeting_title=source_title,
+                            requirement_a_text=new_req.requirement_text,
+                            requirement_b_text=candidate.get("requirement_text"),
+                            status="active",
+                            suggested_resolution=result.get("suggested_resolution"),
                         )
                     )
             return conflicts
@@ -114,34 +118,53 @@ class ConflictDetectorService:
     def detect(
         self,
         new_requirement: Requirement,
-        req_repository,  # RequirementRepository (injected to avoid circular import)
+        req_repository,  # RequirementRepository
+        project_id: str | None = None,
+        embedding: list[float] | None = None,
     ) -> list[Conflict]:
         """
         Full conflict detection pipeline for one new requirement.
-
-        Fetches ALL existing requirements for the meeting from the DB and sends
-        them directly to the LLM for conflict analysis. The embedding-based
-        pre-filter is intentionally omitted because hash fallback embeddings have
-        no semantic meaning and would incorrectly eliminate all candidates.
+        Supports vector similarity pre-filtering across project or meeting scope.
         """
         try:
-            all_existing = req_repository.get_all_for_conflict_check(
-                meeting_id=new_requirement.meeting_id,
-                exclude_id=new_requirement.requirement_id,
-            )
+            if embedding and any(x != 0.0 for x in embedding):
+                if project_id:
+                    candidates = req_repository.find_similar_by_project(
+                        embedding=embedding,
+                        project_id=project_id,
+                        top_k=MAX_CANDIDATES,
+                        exclude_id=new_requirement.requirement_id,
+                    )
+                else:
+                    candidates = req_repository.find_similar_by_embedding(
+                        embedding=embedding,
+                        meeting_id=new_requirement.meeting_id,
+                        top_k=MAX_CANDIDATES,
+                        exclude_id=new_requirement.requirement_id,
+                    )
+            else:
+                if project_id:
+                    all_existing = req_repository.get_all_by_project_for_conflict_check(
+                        project_id=project_id,
+                        exclude_id=new_requirement.requirement_id,
+                    )
+                else:
+                    all_existing = req_repository.get_all_for_conflict_check(
+                        meeting_id=new_requirement.meeting_id,
+                        exclude_id=new_requirement.requirement_id,
+                    )
+                candidates = all_existing[:MAX_CANDIDATES]
+
         except Exception as e:
-            print(f"[ConflictDetector] DB fetch error: {e}")
+            print(f"[ConflictDetector] Candidate fetch error: {e}")
             return []
 
-        if not all_existing:
+        if not candidates:
             print(
                 f"[ConflictDetector] No prior requirements to check against for: "
                 f"{new_requirement.requirement_text[:60]!r}"
             )
             return []
-
-        # Cap at MAX_CANDIDATES to avoid exceeding LLM context window
-        candidates = all_existing[:MAX_CANDIDATES]
 
         print(
             f"[ConflictDetector] Checking {len(candidates)} prior requirement(s) against: "

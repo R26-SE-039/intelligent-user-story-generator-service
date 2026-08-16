@@ -17,14 +17,11 @@ class UserStoryRepository:
 
         story_rows = []
         ac_rows = []
-        
+
         for story in stories:
-            try:
-                import uuid
-                uuid.UUID(story.story_id)
-            except ValueError:
-                story.story_id = str(uuid4())
+            # story.story_id is guaranteed to be a valid UUID by the model field_validator
             story_id = story.story_id
+
             story_rows.append(
                 {
                     "id": story_id,
@@ -35,13 +32,13 @@ class UserStoryRepository:
                     "status": story.status,
                 }
             )
-            
+
             for ac in story.acceptance_criteria:
                 ac_rows.append(
                     {
                         "id": str(uuid4()),
                         "user_story_id": story_id,
-                        "criteria": ac
+                        "criteria": ac,
                     }
                 )
 
@@ -56,13 +53,99 @@ class UserStoryRepository:
         values_list = []
         for m in mappings:
             values_list.append(tuple(self._gateway._format_value(m.get(c)) for c in columns))
-            
+
         col_str = ", ".join([f'"{c}"' for c in columns])
         query = f'INSERT INTO "{table}" ({col_str}) VALUES %s ON CONFLICT DO NOTHING'
-        
+
         from psycopg2.extras import execute_values
         with self._gateway._get_connection() as conn:
             with conn.cursor() as cur:
                 execute_values(cur, query, values_list)
             conn.commit()
+
+    def update_story(
+        self,
+        story_id: str,
+        title: str,
+        story: str,
+        acceptance_criteria: list[str],
+        priority: str = "Should",
+    ) -> None:
+        """Update story text and replace acceptance criteria rows for a story."""
+        # 1. Update user_stories table
+        self._gateway.update(
+            self._gateway.settings.user_stories_table,
+            {
+                "title": title,
+                "story": story,
+                "priority": priority,
+            },
+            eq={"id": story_id},
+        )
+
+        # 2. Refresh acceptance_criteria rows
+        try:
+            self._gateway.delete(
+                self._gateway.settings.acceptance_criteria_table,
+                eq={"user_story_id": story_id},
+            )
+        except Exception:
+            pass
+
+        ac_rows = [
+            {
+                "id": str(uuid4()),
+                "user_story_id": story_id,
+                "criteria": ac,
+            }
+            for ac in acceptance_criteria
+            if ac.strip()
+        ]
+        if ac_rows:
+            self._gateway.upsert(
+                self._gateway.settings.acceptance_criteria_table,
+                ac_rows,
+                on_conflict="id",
+            )
+
+    def get_by_id(self, story_id: str) -> dict | None:
+        """Fetch user story row with acceptance criteria."""
+        stories = self._gateway.select(
+            self._gateway.settings.user_stories_table,
+            eq={"id": story_id},
+        )
+        if not stories:
+            return None
+        story_row = dict(stories[0])
+        ac_rows = self._gateway.select(
+            self._gateway.settings.acceptance_criteria_table,
+            eq={"user_story_id": story_id},
+        )
+        story_row["acceptance_criteria"] = [r["criteria"] for r in ac_rows if r.get("criteria")]
+        return story_row
+
+    def get_stories_by_iteration(self, iteration_id: str) -> list[dict]:
+        """
+        Fetch all user stories + acceptance criteria for a given iteration.
+        Join path: iteration_id → meetings → user_stories → acceptance_criteria
+        """
+        query = """
+            SELECT
+                us.id, us.title, us.story, us.priority,
+                us.status, us.meeting_id,
+                COALESCE(
+                    json_agg(ac.criteria ORDER BY ac.id)
+                    FILTER (WHERE ac.criteria IS NOT NULL),
+                    '[]'
+                ) AS acceptance_criteria
+            FROM user_stories us
+            LEFT JOIN acceptance_criteria ac ON ac.user_story_id = us.id
+            WHERE us.meeting_id IN (
+                SELECT id FROM meetings WHERE iteration_id = %s
+            )
+            GROUP BY us.id, us.title, us.story,
+                     us.priority, us.status, us.meeting_id
+            ORDER BY us.meeting_id, us.id
+        """
+        return self._gateway.execute_query(query, (iteration_id,))
 

@@ -30,9 +30,55 @@ class PostgresGateway:
                 "PostgreSQL is configured but the 'psycopg2-binary' package is not installed."
             )
 
+        try:
+            self.run_migrations()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"[PostgresGateway] Migration warning: {e}")
+
     @classmethod
     def from_env(cls) -> "PostgresGateway":
         return cls(load_postgres_settings())
+
+    def run_migrations(self) -> None:
+        """Run idempotent database migrations to ensure required schema columns exist."""
+        migrations = [
+            """
+            ALTER TABLE meetings 
+                ADD COLUMN IF NOT EXISTS iteration_id UUID;
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_meetings_iteration_id ON meetings(iteration_id);
+            """,
+            """
+            ALTER TABLE conflicts 
+                ADD COLUMN IF NOT EXISTS source_meeting_id UUID REFERENCES meetings(id) ON DELETE SET NULL,
+                ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active',
+                ADD COLUMN IF NOT EXISTS suggested_resolution TEXT,
+                ADD COLUMN IF NOT EXISTS previous_text_a TEXT,
+                ADD COLUMN IF NOT EXISTS previous_text_b TEXT,
+                ADD COLUMN IF NOT EXISTS resolved_by UUID,
+                ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;
+            """,
+            """
+            ALTER TABLE requirements 
+                ADD COLUMN IF NOT EXISTS duplicate_of_id UUID REFERENCES requirements(id) ON DELETE SET NULL;
+            """
+        ]
+        
+        import logging
+        logger = logging.getLogger(__name__)
+
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                for sql in migrations:
+                    try:
+                        cur.execute(sql)
+                        conn.commit()
+                    except Exception as e:
+                        conn.rollback()
+                        logger.warning(f"[PostgresGateway] Migration statement failed: {e}")
+
 
     def _get_connection(self):
         return get_connection(self.settings)
@@ -168,4 +214,19 @@ class PostgresGateway:
                 cur.execute(query, tuple(query_vals))
                 rows = cur.fetchall()
                 # RealDictRow behaves mostly like a dict
+                return [dict(row) for row in rows]
+
+    def execute(self, query: str, params: tuple | list | None = None) -> None:
+        """Execute a raw SQL command (e.g. UPDATE, INSERT, ALTER)."""
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params or ())
+            conn.commit()
+
+    def execute_query(self, query: str, params: tuple | list | None = None) -> list[dict[str, Any]]:
+        """Execute a raw SELECT query and return rows as dictionary list."""
+        with self._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, params or ())
+                rows = cur.fetchall()
                 return [dict(row) for row in rows]
