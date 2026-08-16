@@ -18,7 +18,6 @@ class PostgresSettings:
     user: str
     password: str
     dbname: str
-    
     meetings_table: str
     chat_messages_table: str
     transcripts_table: str
@@ -32,6 +31,7 @@ class PostgresSettings:
     acceptance_criteria_table: str
     meeting_participants_table: str
     user_story_validations_table: str
+    sslmode: str = "disable"
 
     @property
     def enabled(self) -> bool:
@@ -78,6 +78,7 @@ class Settings(BaseSettings):
     db_user: str = Field(default="postgres", alias="DB_USER")
     db_password: str = Field(default="postgres", alias="DB_PASSWORD")
     db_name: str = Field(default="agile_meeting_db", alias="DB_NAME")
+    db_sslmode: str = Field(default="disable", alias="DB_SSLMODE")
     
     meetings_table: str = Field(default="meetings", alias="DB_MEETINGS_TABLE")
     chat_messages_table: str = Field(default="chat_messages", alias="DB_CHAT_MESSAGES_TABLE")
@@ -127,6 +128,7 @@ def load_postgres_settings() -> PostgresSettings:
         user=s.db_user.strip(),
         password=s.db_password.strip(),
         dbname=s.db_name.strip(),
+        sslmode=s.db_sslmode.strip(),
         meetings_table=s.meetings_table.strip(),
         chat_messages_table=s.chat_messages_table.strip(),
         transcripts_table=s.transcripts_table.strip(),

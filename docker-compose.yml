@@ -1,25 +1,6 @@
 version: '3.8'
 
 services:
-  db:
-    image: pgvector/pgvector:pg16
-    container_name: meeting_db
-    environment:
-      POSTGRES_USER: meeting
-      POSTGRES_PASSWORD: nextgen_db
-      POSTGRES_DB: meeting_db
-    ports:
-      - "5434:5432"
-    volumes:
-      - meeting_pgdata:/var/lib/postgresql/data
-      - ./src/db/migrations:/docker-entrypoint-initdb.d
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U meeting -d meeting_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   app:
     build: .
     container_name: meeting_app
@@ -27,10 +8,4 @@ services:
       - .env
     ports:
       - "8001:8001"
-    depends_on:
-      db:
-        condition: service_healthy
     restart: unless-stopped
-
-volumes:
-  meeting_pgdata:

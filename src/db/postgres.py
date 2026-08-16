@@ -63,10 +63,6 @@ class PostgresGateway:
             """
             ALTER TABLE requirements 
                 ADD COLUMN IF NOT EXISTS duplicate_of_id UUID REFERENCES requirements(id) ON DELETE SET NULL;
-            """,
-            """
-            CREATE INDEX IF NOT EXISTS idx_req_embeddings_vector 
-                ON requirement_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
             """
         ]
         

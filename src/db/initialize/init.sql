@@ -171,4 +171,6 @@ CREATE INDEX idx_user_stories_meeting_id ON user_stories(meeting_id);
 CREATE INDEX idx_acceptance_criteria_user_story_id ON acceptance_criteria(user_story_id);
 CREATE INDEX idx_user_story_validations_story_id ON user_story_validations(user_story_id);
 CREATE INDEX idx_user_story_validations_status ON user_story_validations(status);
-CREATE INDEX IF NOT EXISTS idx_req_embeddings_vector ON requirement_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+-- NOTE: HNSW/ivfflat index is commented out because 3072 dimensions exceeds pgvector's index limits (max 2000 dimensions).
+-- PostgreSQL will use exact nearest neighbor scan which is extremely fast for standard datasets.
+-- CREATE INDEX IF NOT EXISTS idx_req_embeddings_vector ON requirement_embeddings USING hnsw (embedding vector_cosine_ops);
