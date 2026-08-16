@@ -149,3 +149,26 @@ class UserStoryRepository:
         """
         return self._gateway.execute_query(query, (iteration_id,))
 
+    def get_stories_by_meeting(self, meeting_id: str) -> list[dict]:
+        """
+        Fetch all user stories + acceptance criteria for a given meeting.
+        """
+        query = """
+            SELECT
+                us.id, us.title, us.story, us.priority,
+                us.status, us.meeting_id,
+                COALESCE(
+                    json_agg(ac.criteria ORDER BY ac.id)
+                    FILTER (WHERE ac.criteria IS NOT NULL),
+                    '[]'
+                ) AS acceptance_criteria
+            FROM user_stories us
+            LEFT JOIN acceptance_criteria ac ON ac.user_story_id = us.id
+            WHERE us.meeting_id = %s
+            GROUP BY us.id, us.title, us.story,
+                     us.priority, us.status, us.meeting_id
+            ORDER BY us.id
+        """
+        return self._gateway.execute_query(query, (meeting_id,))
+
+
