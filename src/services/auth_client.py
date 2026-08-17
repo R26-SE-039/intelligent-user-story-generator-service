@@ -26,3 +26,27 @@ async def fetch_active_iteration(
     except Exception as e:
         LOGGER.warning(f"[AuthClient] Could not fetch active iteration: {e}")
         return None  # graceful degrade
+
+async def fetch_project_config(
+    project_id: str,
+    jwt_token: str,
+    auth_service_url: str,
+    timeout: float = 3.0,
+) -> dict | None:
+    """
+    Call Auth Service GET /projects/{project_id}/configuration.
+    Returns config dict (with decrypted credentials) or None on failure.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(
+                f"{auth_service_url}/projects/{project_id}/configuration",
+                headers={"Authorization": jwt_token},
+            )
+            if response.status_code == 200:
+                return response.json()
+            return None
+    except Exception as e:
+        LOGGER.warning(f"[AuthClient] Could not fetch project configuration: {e}")
+        return None
+

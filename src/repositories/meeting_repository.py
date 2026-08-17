@@ -129,3 +129,33 @@ class MeetingRepository:
                     conn.commit()
 
         return {"transcript_id": transcript_id, "utterance_count": len(utterance_rows)}
+
+    def get_meetings_by_iteration(self, iteration_id: str) -> list[dict[str, Any]]:
+        query = """
+            SELECT 
+                m.id, 
+                m.title, 
+                m.start_time, 
+                m.end_time, 
+                m.status, 
+                COUNT(us.id)::int AS story_count
+            FROM meetings m
+            LEFT JOIN user_stories us ON us.meeting_id = m.id
+            WHERE m.iteration_id = %s
+            GROUP BY m.id
+            ORDER BY m.start_time DESC
+        """
+        return self._gateway.execute_query(query, (iteration_id,))
+
+    def get_iteration_summary(self, iteration_id: str) -> dict[str, Any]:
+        query = """
+            SELECT 
+                COUNT(DISTINCT m.id)::int AS total_meetings,
+                COUNT(DISTINCT us.id)::int AS total_stories
+            FROM meetings m
+            LEFT JOIN user_stories us ON us.meeting_id = m.id
+            WHERE m.iteration_id = %s
+        """
+        res = self._gateway.execute_query(query, (iteration_id,))
+        return res[0] if res else {"total_meetings": 0, "total_stories": 0}
+
