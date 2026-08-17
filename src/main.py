@@ -13,6 +13,7 @@ logging.basicConfig(
 from contextlib import asynccontextmanager
 from src.api.routes.user_stories import router as user_stories_router
 from src.api.routes.speech import router as speech_router
+from src.api.routes.jira import router as jira_router
 from src.core.config import Settings, load_speech_settings
 from src.db.postgres import PostgresGateway
 from src.repositories.meeting_repository import MeetingRepository
@@ -123,6 +124,7 @@ app.add_middleware(
 # --- API Routers ---
 app.include_router(speech_router, prefix="/api/v1/speech")
 app.include_router(user_stories_router, prefix="/api/v1/pipeline")
+app.include_router(jira_router, prefix="/api/v1/jira")
 
 # --- Health Check Endpoint ---
 @app.get("/health")

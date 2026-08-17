@@ -351,6 +351,66 @@ async def get_iteration_stories(
         "total_stories": len(stories),
     }
 
+@router.get("/project/{project_id}/iteration/history")
+async def get_project_iteration_history(
+    project_id: str,
+    user: dict = Depends(get_current_user),
+    app_settings: Settings = Depends(get_settings),
+    authorization: str | None = Header(None),
+    meeting_repo: MeetingRepository = Depends(get_meeting_repo),
+):
+    iteration = await fetch_active_iteration(
+        project_id=project_id,
+        jwt_token=authorization,
+        auth_service_url=app_settings.auth_service_url,
+    )
+    if not iteration:
+        raise HTTPException(status_code=404, detail="No active iteration for this project")
+        
+    iteration_id = iteration["id"]
+    meetings = meeting_repo.get_meetings_by_iteration(iteration_id)
+    summary = meeting_repo.get_iteration_summary(iteration_id)
+    
+    return {
+        "status": "success",
+        "iteration": iteration,
+        "summary": summary,
+        "meetings": meetings
+    }
+
+
+@router.get("/iteration/{iteration_id}/meetings")
+def get_iteration_meetings(
+    iteration_id: str,
+    user: dict = Depends(get_current_user),
+    meeting_repo: MeetingRepository = Depends(get_meeting_repo),
+):
+    meetings = meeting_repo.get_meetings_by_iteration(iteration_id)
+    summary = meeting_repo.get_iteration_summary(iteration_id)
+    return {
+        "status": "success",
+        "iteration_id": iteration_id,
+        "summary": summary,
+        "meetings": meetings
+    }
+
+
+@router.get("/meeting/{meeting_id}/stories")
+def get_meeting_stories_endpoint(
+    meeting_id: str,
+    user: dict = Depends(get_current_user),
+    request: Request = None,
+):
+    user_story_repo = request.app.state.story_repo
+    stories = user_story_repo.get_stories_by_meeting(meeting_id)
+    return {
+        "status": "success",
+        "meeting_id": meeting_id,
+        "stories": stories,
+        "total_stories": len(stories)
+    }
+
+
 @router.websocket("/ws/{meeting_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
