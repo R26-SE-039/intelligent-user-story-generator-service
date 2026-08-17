@@ -7,6 +7,8 @@ This service parses transcripts from collaborative agile meetings, extracts requ
 - **Database**: Neon Cloud PostgreSQL (with `pgvector` for embedding storage)
 - **Vector Search**: pgvector & ChromaDB (for transcript retrieval)
 - **Transcription**: Azure Cognitive Services Speech SDK (Real-time WebSockets & batch parsing)
+- **ML & Classification**: PyTorch & HuggingFace Transformers (ModernBERT Utterance Classifier)
+- **Integrations**: Jira API (`atlassian-python-api`)
 - **Security**: JWT-based Authentication (integrated with Auth Service)
 
 The project follows clean architecture principles:
