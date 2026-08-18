@@ -223,3 +223,50 @@ def override_story_status_endpoint(
         )
 
 
+@router.get("/iterations/{iteration_id}/requirements-with-stories")
+def get_requirements_with_stories(
+    iteration_id: str,
+    req_repo: RequirementRepository = Depends(get_requirement_repo),
+):
+    """Return requirements and their mapped user stories for an iteration.
+
+    Each item in the response pairs one active requirement with the user story
+    generated from it, including acceptance criteria.
+
+    Returns:
+        {
+            "iteration_id": "...",
+            "total": <int>,
+            "items": [
+                {
+                    "requirement_id": "...",
+                    "requirement_text": "...",
+                    "requirement_type": "...",
+                    "requirement_status": "active",
+                    "requirement_created_at": "...",
+                    "meeting_id": "...",
+                    "meeting_title": "...",
+                    "user_story_id": "...",
+                    "user_story_title": "...",
+                    "user_story_text": "...",
+                    "priority": "...",
+                    "user_story_status": "...",
+                    "acceptance_criteria": ["..."]
+                },
+                ...
+            ]
+        }
+    """
+    try:
+        items = req_repo.get_requirements_with_stories_by_iteration(iteration_id)
+        return {
+            "iteration_id": iteration_id,
+            "total": len(items),
+            "items": items,
+        }
+    except Exception as exc:
+        LOGGER.exception("REQUIREMENTS WITH STORIES FETCH CRASH")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch requirements with stories: {str(exc)}",
+        )

@@ -284,3 +284,60 @@ class RequirementRepository:
             eq={"id": requirement_id}
         )
 
+    def get_requirements_with_stories_by_iteration(self, iteration_id: str) -> list[dict]:
+        """Return requirements and their mapped user stories for an iteration.
+
+        Join path:
+            meetings (iteration_id = ?) → requirements (active)
+            INNER JOIN user_story_requirement_mapping
+            INNER JOIN user_stories
+            LEFT  JOIN acceptance_criteria (aggregated per story)
+        Each row represents one requirement ↔ user_story pairing.
+        Acceptance criteria are aggregated into a JSON array per story.
+        """
+        req_table   = self._gateway.settings.requirements_table
+        meetings_table = self._gateway.settings.meetings_table
+        mapping_table  = self._gateway.settings.user_story_requirement_mapping_table
+        stories_table  = self._gateway.settings.user_stories_table
+        ac_table       = self._gateway.settings.acceptance_criteria_table
+
+        query = f"""
+            SELECT
+                r.id                  AS requirement_id,
+                r.requirement_text,
+                r.requirement_type,
+                r.status              AS requirement_status,
+                r.created_at          AS requirement_created_at,
+                m.id                  AS meeting_id,
+                m.title               AS meeting_title,
+                us.id                 AS user_story_id,
+                us.title              AS user_story_title,
+                us.story              AS user_story_text,
+                us.priority,
+                us.status             AS user_story_status,
+                COALESCE(
+                    json_agg(ac.criteria ORDER BY ac.id)
+                    FILTER (WHERE ac.criteria IS NOT NULL),
+                    '[]'
+                )                     AS acceptance_criteria
+            FROM "{req_table}" r
+            JOIN "{meetings_table}"   m    ON m.id    = r.meeting_id
+            JOIN "{mapping_table}"    usrm ON usrm.requirement_id = r.id
+            JOIN "{stories_table}"    us   ON us.id   = usrm.user_story_id
+            LEFT JOIN "{ac_table}"    ac   ON ac.user_story_id   = us.id
+            WHERE m.iteration_id = %s
+              AND r.status = 'active'
+            GROUP BY
+                r.id, r.requirement_text, r.requirement_type,
+                r.status, r.created_at,
+                m.id, m.title,
+                us.id, us.title, us.story, us.priority, us.status
+            ORDER BY m.id, r.created_at ASC, us.id ASC;
+        """
+
+        from psycopg2.extras import RealDictCursor
+        with self._gateway._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, (iteration_id,))
+                return [dict(row) for row in cur.fetchall()]
+
