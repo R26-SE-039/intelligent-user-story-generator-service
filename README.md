@@ -255,3 +255,23 @@ erDiagram
 - `POST /generate-from-requirements` — Ingest active requirement details and output agile stories.
 - `POST /user-stories/{story_id}/update` — Update manual changes to a story and trigger 5-layer backend re-validation.
 - `POST /user-stories/{story_id}/status` — BA manual override endpoint to mark a story as Approved, Rejected, or Reset.
+
+---
+
+## Testing
+
+The service includes a complete, isolated Unit & Integration test suite (70 tests) running in under 2 seconds.
+
+```bash
+# Run the complete test suite (Unit + Integration)
+python -m pytest -p no:langsmith
+
+# Run unit tests only
+python -m pytest tests/unit/ -p no:langsmith
+
+# Run integration tests only
+python -m pytest tests/integration/ -p no:langsmith
+```
+
+For detailed documentation on fixture setup, module stubbing, coverage reports, and test cases, refer to the [Testing Guide](doc/TESTING_GUIDE.md).
+
