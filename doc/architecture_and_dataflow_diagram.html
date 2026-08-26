@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Complete End-to-End Architecture & Data Flow Diagram</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-card: #1e293b;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --border: #334155;
+      --code-bg: #090d16;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 1300px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+      padding: 2rem;
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+    }
+
+    header h1 {
+      font-size: 2.25rem;
+      font-weight: 800;
+      color: #38bdf8;
+      margin-bottom: 0.5rem;
+    }
+
+    header p {
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: center;
+      margin-top: 1.5rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background-color: var(--accent);
+      color: #0f172a;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--accent-hover);
+      color: white;
+      transform: translateY(-2px);
+    }
+
+    .btn-outline {
+      background-color: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+    }
+
+    .btn-outline:hover {
+      background-color: var(--bg-secondary);
+      border-color: var(--accent);
+    }
+
+    .section-card {
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 2.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    }
+
+    .section-card h2 {
+      font-size: 1.6rem;
+      color: var(--accent);
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+
+    .mermaid-container {
+      background-color: var(--code-bg);
+      border-radius: 12px;
+      padding: 1.5rem;
+      overflow-x: auto;
+      display: flex;
+      justify-content: center;
+      margin: 1.5rem 0;
+      border: 1px solid var(--border);
+    }
+
+    .mermaid {
+      width: 100%;
+      min-height: 250px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1rem;
+    }
+
+    .sample-box {
+      background-color: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+
+    .sample-box h4 {
+      color: #7dd3fc;
+      margin-bottom: 0.75rem;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    pre {
+      background-color: #030712;
+      color: #e2e8f0;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      line-height: 1.45;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      border: 1px solid #1f2937;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      font-size: 0.95rem;
+    }
+
+    th, td {
+      padding: 0.85rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      background-color: rgba(56, 189, 248, 0.1);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    tr:hover {
+      background-color: rgba(255, 255, 255, 0.02);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .badge-success { background-color: rgba(34, 197, 94, 0.2); color: #4ade80; }
+    .badge-warning { background-color: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .badge-danger { background-color: rgba(239, 68, 68, 0.2); color: #f87171; }
+    .badge-info { background-color: rgba(56, 189, 248, 0.2); color: #38bdf8; }
+
+    @media print {
+      body {
+        background-color: white;
+        color: black;
+        padding: 0;
+      }
+      .toolbar, .btn {
+        display: none;
+      }
+      .section-card {
+        background-color: white;
+        border: 1px solid #ccc;
+        color: black;
+        box-shadow: none;
+        page-break-inside: avoid;
+      }
+      .mermaid-container, .sample-box, pre {
+        background-color: #f8fafc;
+        color: #0f172a;
+        border-color: #cbd5e1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>NextGenQA Architecture & Data Flow</h1>
+      <p>Intelligent User Story Generation Service — Comprehensive Technical Specification</p>
+      <div class="toolbar">
+        <button class="btn btn-primary" onclick="window.print()">
+          🖨️ Print / Save as PDF
+        </button>
+        <button class="btn btn-outline" onclick="downloadAllSvg()">
+          💾 Download Architecture SVG
+        </button>
+      </div>
+    </header>
+
+    <!-- SECTION 1: SYSTEM OVERVIEW -->
+    <div class="section-card" id="sec-architecture">
+      <h2>
+        <span>1. High-Level System Architecture & Flowchart</span>
+        <button class="btn btn-outline" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" onclick="downloadSvg('mermaid-main', 'architecture_flowchart.svg')">Export SVG</button>
+      </h2>
+      <div class="mermaid-container">
+        <div class="mermaid" id="mermaid-main">
+flowchart TB
+    subgraph Client["1. Client Layer"]
+        MIC["🎙️ Microphone Input (Browser)"] --> WORKLET["⚡ AudioWorkletProcessor\n(Downsample to 16kHz Int16 PCM)"]
+        WORKLET -->|"WebSocket Binary Chunks (1280B)"| WS_EP["/ws/speech/meeting/{meeting_id}"]
+    end
+
+    subgraph AudioEngine["2. Real-Time Audio & Speech Recognition"]
+        WS_EP --> COORD["LiveMeetingCoordinator"]
+        COORD -->|"PushAudioInputStream"| AZ_STREAM["AzureStreamService"]
+        AZ_STREAM --> AZ_CLOUD["☁️ Azure Cognitive Services (Speech-to-Text)"]
+        AZ_CLOUD -->|"Final Utterance Event"| AZ_FINAL["Recognized Utterance Payload"]
+    end
+
+    subgraph Classification["3. Context-Aware Utterance Classification"]
+        AZ_FINAL --> CTX_BUILDER["ContextBuilder\n(Previous | Current | Next)"]
+        CTX_BUILDER --> MBERT["ModernBERT Utterance Classifier\n(Fine-Tuned 9 Classes)"]
+        MBERT --> FILTER{"Is Requirement or\nSuggestion?"}
+        FILTER -->|"No"| CAP_ONLY["Update UI Caption Only"]
+        FILTER -->|"Yes"| EXTRACT_TRIGGER["Trigger LLM Extraction"]
+    end
+
+    subgraph ReqProcessing["4. Requirement Extraction & Embedding"]
+        EXTRACT_TRIGGER --> LLM_EXTRACT["Gemini LLM Extraction Prompt"]
+        LLM_EXTRACT --> RAW_REQ["Requirement Objects Builder (UUID)"]
+        RAW_REQ --> EMB_GEN["Gemini Embeddings Model\n(3072 Dimensions)"]
+        EMB_GEN --> PG_REQ[("PostgreSQL\n(requirements & embeddings)")]
+    end
+
+    subgraph ThreadManager["5. Requirement Thread State Machine"]
+        RAW_REQ --> THREAD_SRV["RequirementThreadService"]
+        THREAD_SRV -->|"pgvector Cosine Distance <= 0.30"| THREAD_SEARCH{"Similar Thread\nFound?"}
+        THREAD_SEARCH -->|"Yes"| THREAD_TRANS["Evaluate State Transition\nDISCOVERED ➔ DISCUSSION ➔ REFINED ➔ VALIDATED"]
+        THREAD_SEARCH -->|"No"| THREAD_NEW["Create New Thread (State: DISCOVERED)"]
+        THREAD_TRANS --> PG_THREADS[("PostgreSQL\n(requirement_threads)")]
+        THREAD_NEW --> PG_THREADS
+    end
+
+    subgraph ConflictEngine["6. Conflict & Duplicate Detection"]
+        RAW_REQ --> CAND_RETRIEVE["Vector Search / Sliding Window\nTop-10 Candidates"]
+        CAND_RETRIEVE --> LLM_CONFLICT["Gemini LLM Conflict Detector"]
+        LLM_CONFLICT --> CONF_CHECK{"Evaluation"}
+        CONF_CHECK -->|"Duplicate First Rule"| DUP_HANDLER["Mark status='duplicate'\nLink duplicate_of_id"]
+        CONF_CHECK -->|"Direct Contradiction"| CONF_HANDLER["Mark status='conflicted'\nSuggested Resolution"]
+        CONF_CHECK -->|"Complementary"| CLEAN_HANDLER["Maintain status='active'"]
+        DUP_HANDLER --> PG_CONFLICTS[("PostgreSQL\n(conflicts)")]
+        CONF_HANDLER --> PG_CONFLICTS
+    end
+
+    subgraph StoryGeneration["7. User Story Generation & 5-Layer Validation"]
+        FIN_REQS["Finalized Requirements"] --> RAG_RETRIEVER["pgvector RAG Evidence Retrieval"]
+        RAG_RETRIEVER --> STORY_GEN["StoryGenerator (Gemini LLM)"]
+        STORY_GEN --> GEN_STORIES["Agile User Story + BDD ACs (Given-When-Then)"]
+        
+        GEN_STORIES --> V_L1["Layer 1: Rule-Based (10%)"]
+        GEN_STORIES --> V_L2["Layer 2: Evidence Grounding (40%)"]
+        GEN_STORIES --> V_L3["Layer 3: Hallucination Risk (5%)"]
+        GEN_STORIES --> V_L4["Layer 4: INVEST Quality (20%)"]
+        
+        V_L1 & V_L2 & V_L3 & V_L4 --> V_L5["Layer 5: Overall Weighted Score\n>=80: Approved | >=50: Needs Review | <50: Rejected"]
+        V_L5 --> PG_STORIES[("PostgreSQL\n(user_stories & validation_results)")]
+    end
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 2: SEQUENCE DIAGRAM -->
+    <div class="section-card" id="sec-sequence">
+      <h2>
+        <span>2. End-to-End Sequence Diagram</span>
+        <button class="btn btn-outline" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" onclick="downloadSvg('mermaid-seq', 'sequence_diagram.svg')">Export SVG</button>
+      </h2>
+      <div class="mermaid-container">
+        <div class="mermaid" id="mermaid-seq">
+sequenceDiagram
+    autonumber
+    actor Speaker as 🎙️ Speaker
+    participant WS as 🔌 WebSocket
+    participant Coord as 🎛️ LiveMeetingCoordinator
+    participant Azure as ☁️ Azure Speech SDK
+    participant Classifier as 🧠 ModernBERT Classifier
+    participant Extractor as 📝 Requirement Extractor (LLM)
+    participant Embedder as 🔢 Gemini Embeddings
+    participant DB as 🗄️ PostgreSQL (pgvector)
+    participant ThreadMgr as 🧵 Thread Service
+    participant ConflictDet as ⚔️ Conflict Detector
+    participant StoryGen as 📖 Story Generator & 5-Layer Validator
+
+    Speaker->>WS: Stream 16kHz PCM chunks (1280 bytes / 40ms)
+    WS->>Coord: Buffer & write to PushAudioInputStream
+    Coord->>Azure: Continuous stream recognition
+    Azure-->>Coord: Recognized Utterance Text
+    Coord->>WS: Broadcast live transcription to meeting room
+
+    Coord->>Classifier: classify("Previous | Utterance | Next")
+    Classifier-->>Coord: Result: { label: "Requirement", confidence: 0.984 }
+
+    Coord->>Extractor: extract(utterance_text)
+    Extractor-->>Coord: Return Requirement object (UUID, text, type)
+    Coord->>DB: INSERT into requirements (status='active')
+    Coord->>Embedder: get_embedding(requirement_text)
+    Embedder-->>Coord: 3072-dimensional float vector
+    Coord->>DB: INSERT into requirement_embeddings (pgvector)
+
+    Coord->>ThreadMgr: process_requirement(meeting_id, text, embedding)
+    ThreadMgr->>DB: Find similar thread (distance <= 0.30)
+    ThreadMgr->>DB: Update/Create thread (DISCOVERED ➔ VALIDATED)
+
+    Coord->>ConflictDet: detect(new_requirement, embedding)
+    ConflictDet->>DB: Query Top-10 prior requirements
+    ConflictDet->>ConflictDet: LLM Contradiction & Duplicate Check
+    alt Duplicate Found
+        ConflictDet->>DB: UPDATE requirements SET status='duplicate'
+    else Logical Conflict Found
+        ConflictDet->>DB: UPDATE requirements SET status='conflicted', INSERT conflict record
+    end
+
+    Speaker->>StoryGen: Generate User Stories for Finalized Requirements
+    StoryGen->>DB: Fetch active requirements & retrieve RAG transcript chunks
+    StoryGen->>StoryGen: Generate User Stories & BDD ACs via LLM
+    StoryGen->>StoryGen: Execute 5-Layer Validation (Rule, Evidence, Hallucination, INVEST, Overall)
+    StoryGen->>DB: Persist user_stories & validation_results
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 3: STEP-BY-STEP SAMPLE DATA -->
+    <div class="section-card">
+      <h2>3. Step-by-Step Sample Data Payloads</h2>
+      <div class="grid-2">
+        <div class="sample-box">
+          <h4>1️⃣ Azure Speech Transcription Payload</h4>
+          <pre>{
+  "type": "transcription",
+  "data": {
+    "text": "Users must be able to reset their password via email OTP within 5 minutes.",
+    "speaker_id": "conn-9b1deb4d-3b7d",
+    "speaker_name": "Kasun (Lead BA)",
+    "is_final": true,
+    "timestamp_start": 12.4,
+    "timestamp_end": 16.8
+  }
+}</pre>
+        </div>
+
+        <div class="sample-box">
+          <h4>2️⃣ ModernBERT Classifier Output</h4>
+          <pre>{
+  "input_context": "Previous: Need secure reset | Utterance: Users must reset via email OTP | Next: Agreed",
+  "label": "Requirement",
+  "confidence": 0.9842,
+  "is_requirement": true
+}</pre>
+        </div>
+
+        <div class="sample-box">
+          <h4>3️⃣ Extracted Requirement Object</h4>
+          <pre>{
+  "requirement_id": "req-7f8a9b1c-1234-4567",
+  "meeting_id": "meet-c83b92d1-921a-4932",
+  "requirement_text": "The system shall send a 6-digit OTP to registered email with 5-minute expiration.",
+  "requirement_type": "functional",
+  "status": "active"
+}</pre>
+        </div>
+
+        <div class="sample-box">
+          <h4>4️⃣ Requirement Thread State Machine</h4>
+          <pre>{
+  "thread_id": "th-550e8400-e29b-41d4",
+  "title": "Email OTP Password Reset",
+  "summary": "6-digit OTP via email expiring in 5 mins. 3 attempts limit.",
+  "state": "REFINED",
+  "linked_requirements": ["req-7f8a9b1c-1234-4567"]
+}</pre>
+        </div>
+
+        <div class="sample-box">
+          <h4>5️⃣ Conflict & Duplicate Result</h4>
+          <pre>{
+  "conflict_id": "conf-4a2b1c3d-9999",
+  "requirement_a_id": "req-7f8a9b1c",
+  "requirement_b_id": "req-999a888b",
+  "conflict_type": "temporal",
+  "severity": "high",
+  "explanation": "Req A specifies 5-min expiry whereas Req B specifies 15-min expiry.",
+  "suggested_resolution": "The system shall send an OTP expiring after 10 minutes.",
+  "status": "active"
+}</pre>
+        </div>
+
+        <div class="sample-box">
+          <h4>6️⃣ Generated Agile User Story</h4>
+          <pre>{
+  "story_id": "US-101",
+  "title": "Password Reset via Email OTP",
+  "story": "As a registered customer, I want to reset my password using an email OTP, so that I can securely regain access.",
+  "acceptance_criteria": [
+    "Given user on forgot password page, When they submit email, Then 6-digit OTP is sent with 5-min expiry.",
+    "Given OTP received, When correct OTP entered within 5 mins, Then redirected to set new password screen.",
+    "Given OTP expired, When user enters it, Then show error 'OTP expired'."
+  ],
+  "priority": "Must",
+  "confidence": 0.95,
+  "status": "ready"
+}</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 4: VALIDATION SCORING ENGINE -->
+    <div class="section-card">
+      <h2>4. 5-Layer Validation Engine & Scoring Weights</h2>
+      <div style="background-color: var(--code-bg); padding: 1rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 1.5rem; text-align: center; font-size: 1.05rem; color: #38bdf8;">
+        <strong>Formula:</strong> Overall Score = (0.40 × Evidence) + (0.25 × Semantic × 100) + (0.20 × (INVEST/5 × 100)) + (0.10 × Rule) + (0.05 × (1 - Hallucination) × 100)
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Layer</th>
+            <th>Validator</th>
+            <th>Methodology / AI Model</th>
+            <th>Weight</th>
+            <th>Sample Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Layer 1</strong></td>
+            <td>Rule-Based Validation</td>
+            <td>Regex structure, required fields, BDD GWT syntax check</td>
+            <td><span class="badge badge-info">10%</span></td>
+            <td>100.0 / 100</td>
+          </tr>
+          <tr>
+            <td><strong>Layer 2</strong></td>
+            <td>Evidence Grounding</td>
+            <td>Cosine similarity vs RAG Utterance chunks (Gemini 3072-dim)</td>
+            <td><span class="badge badge-info">40%</span></td>
+            <td>89.24 / 100</td>
+          </tr>
+          <tr>
+            <td><strong>Layer 3</strong></td>
+            <td>Hallucination Detection</td>
+            <td>Gemini LLM claim grounding & unsupported claims check</td>
+            <td><span class="badge badge-info">5%</span></td>
+            <td>0.02 (Clean)</td>
+          </tr>
+          <tr>
+            <td><strong>Layer 4</strong></td>
+            <td>INVEST Quality Scoring</td>
+            <td>Gemini LLM (Independent, Negotiable, Valuable, Estimable, Small, Testable)</td>
+            <td><span class="badge badge-info">20%</span></td>
+            <td>4.75 / 5.0 (95%)</td>
+          </tr>
+          <tr>
+            <td><strong>Layer 5</strong></td>
+            <td>Overall Decision</td>
+            <td>Weighted aggregate calculation</td>
+            <td><span class="badge badge-success">Decision</span></td>
+            <td><strong>90.12 / 100 <span class="badge badge-success">Approved</span></strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      securityLevel: 'loose',
+      fontFamily: 'ui-sans-serif, system-ui, sans-serif'
+    });
+
+    function downloadSvg(elementId, filename) {
+      const container = document.getElementById(elementId);
+      const svg = container.querySelector('svg');
+      if (!svg) {
+        alert('SVG is still rendering, please wait a moment.');
+        return;
+      }
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = url;
+      downloadLink.download = filename;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+    }
+
+    function downloadAllSvg() {
+      downloadSvg('mermaid-main', 'complete_architecture_diagram.svg');
+    }
+  </script>
+</body>
+</html>

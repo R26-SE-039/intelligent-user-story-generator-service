@@ -39,6 +39,7 @@ class PipelineRunRequest(BaseModel):
 class PipelineRunResponse(BaseModel):
     """Combined response for full pipeline execution."""
     transcript_id: str
+    meeting_id: str | None = None  # Populated by upload endpoint for Human-in-the-Loop flow
     indexed_chunks: int
     query: str
     stories: list[GeneratedStory]

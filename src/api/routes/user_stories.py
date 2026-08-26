@@ -105,7 +105,10 @@ async def pipeline_upload(
         transcript.project_id = project_id
 
         request = PipelineRunRequest(transcript=transcript, query=query)
-        return pipeline.run(request)
+        response = pipeline.run(request)
+        # Explicitly surface meeting_id for the Human-in-the-Loop BA review flow
+        response.meeting_id = meeting_id
+        return response
     except Exception as exc:
         LOGGER.exception("UPLOAD PIPELINE CRASH")
         raise HTTPException(
