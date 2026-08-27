@@ -1,0 +1,74 @@
+name: CI/CD - Intelligent User Story Generator Service
+
+on:
+  push:
+    branches:
+      - deployment
+
+jobs:
+  # ==========================================
+  # STAGE 1: AUTOMATED PYTEST SUITE (CI)
+  # ==========================================
+  test:
+    name: Run PyTest Test Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Test Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest httpx
+          pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+
+      - name: Run PyTest Suite
+        run: |
+          pytest
+        env:
+          ENVIRONMENT: test
+          AUTH_SECRET: test-secret-key-for-pytest
+
+  # ==========================================
+  # STAGE 2: DEPLOY TO AWS EC2 (CD)
+  # ==========================================
+  deploy:
+    name: Deploy to AWS EC2
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/deployment' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to AWS EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "🚀 Starting Automated Deployment on EC2..."
+            
+            # Navigate to service folder
+            cd ~/NextGenQA/intelligent-user-story-generator-service
+            
+            # Pull latest code from deployment branch
+            git fetch origin deployment
+            git reset --hard origin/deployment
+            
+            # Rebuild and restart container
+            docker-compose up -d --build
+            
+            # Clean unused images
+            docker image prune -f
+            
+            echo "✅ Deployment Succeeded and Service is Live!"
