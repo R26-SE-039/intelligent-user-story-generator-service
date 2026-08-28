@@ -38,3 +38,9 @@ def auth_headers():
     }
     token = jwt.encode(payload, secret, algorithm="HS256")
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def mock_auth_headers(auth_headers):
+    """Fixture alias for mock_auth_headers."""
+    return auth_headers
