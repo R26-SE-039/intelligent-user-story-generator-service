@@ -8,4 +8,7 @@ data/
 .git/
 .gitignore
 doc/
-*.md
+models/
+*.pcm
+debug_audio.pcm
+.dockerignore

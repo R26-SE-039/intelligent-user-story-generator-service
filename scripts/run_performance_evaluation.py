@@ -242,6 +242,19 @@ _PIPELINE_RUN_PAYLOAD = {
 }
 
 
+def _get_async_client(base_url: str = _API_BASE_URL) -> httpx.AsyncClient:
+    """Return an httpx client, using in-process ASGITransport if testing in CI/offline without a live server."""
+    if base_url in {"http://localhost:8001", "in-process"} and not os.getenv("BENCHMARK_API_URL"):
+        try:
+            from httpx import ASGITransport
+            from src.main import app
+            transport = ASGITransport(app=app)
+            return httpx.AsyncClient(transport=transport, base_url="http://test")
+        except Exception as err:
+            pass
+    return httpx.AsyncClient(base_url=base_url)
+
+
 class ApiBenchmarkRunner:
     """Stage B: Measures FastAPI endpoint latency using httpx."""
 
@@ -288,7 +301,7 @@ class ApiBenchmarkRunner:
         }
 
     async def run_async(self) -> dict:
-        async with httpx.AsyncClient(base_url=_API_BASE_URL) as client:
+        async with _get_async_client(_API_BASE_URL) as client:
             health = await self._measure_endpoint(client, "GET", "/health",
                                                    n=min(_API_REQUESTS, 30))
             pipeline = await self._measure_endpoint(client, "POST",
@@ -341,7 +354,7 @@ class LoadTestRunner:
             except Exception:
                 errors += 1
 
-        async with httpx.AsyncClient(base_url=_API_BASE_URL) as client:
+        async with _get_async_client(_API_BASE_URL) as client:
             tasks = [asyncio.create_task(_single(client)) for _ in range(n_concurrent)]
             t_wall_start = time.perf_counter()
             await asyncio.gather(*tasks, return_exceptions=True)
