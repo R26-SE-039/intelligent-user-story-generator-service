@@ -275,3 +275,16 @@ python -m pytest tests/integration/ -p no:langsmith
 
 For detailed documentation on fixture setup, module stubbing, coverage reports, and test cases, refer to the [Testing Guide](doc/TESTING_GUIDE.md).
 
+---
+
+## Deployment & CI/CD Pipeline
+
+The service is fully containerized and deployed on **AWS EC2** (`eu-north-1`) with automated CI/CD via **GitHub Actions**:
+
+- **Cloud Compute**: AWS EC2 `t3.small` (Ubuntu 24.04 LTS + 4GB Swap Space)
+- **Model Inference**: PyTorch CPU-optimized ModernBERT Utterance Classifier mounted via volume
+- **Database**: Neon Cloud Serverless PostgreSQL (`pgvector` enabled)
+- **CI/CD Quality Gate**: Every push to the `deployment` branch runs the 70 automated test cases; only passing builds are deployed via zero-downtime Docker Compose rebuild.
+
+For the full deployment architecture, server commands, environment configurations, and GitHub Secrets setup, refer to the [AWS & CI/CD Deployment Guide](doc/DEPLOYMENT_GUIDE.md).
+

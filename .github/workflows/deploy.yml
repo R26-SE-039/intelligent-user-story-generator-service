@@ -58,12 +58,15 @@ jobs:
           script: |
             echo "🚀 Starting Automated Deployment on EC2..."
             
-            # Navigate to service folder
+            mkdir -p ~/NextGenQA/intelligent-user-story-generator-service
             cd ~/NextGenQA/intelligent-user-story-generator-service
             
-            # Pull latest code from deployment branch
-            git fetch origin deployment
-            git reset --hard origin/deployment
+            if [ ! -d ".git" ]; then
+              git clone -b deployment https://github.com/R26-SE-039/intelligent-user-story-generator-service.git .
+            else
+              git fetch origin deployment
+              git reset --hard origin/deployment
+            fi
             
             # Rebuild and restart container
             docker-compose up -d --build
