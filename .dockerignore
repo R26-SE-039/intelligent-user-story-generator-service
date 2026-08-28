@@ -9,3 +9,9 @@ data/
 .gitignore
 doc/
 *.md
+
+# The 1.7 GB model is NOT baked into the image — it is bind-mounted from the
+# host at runtime (MODERNBERT_MODEL_PATH). Keeps the image lean + builds fast.
+models/
+# Stray debug capture in the repo root (~31 MB), not needed at runtime.
+*.pcm
