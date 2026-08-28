@@ -1,0 +1,36 @@
+name: deploy
+# Auto-deploy to the NextGenQA EC2 box on push to the deploy branch.
+# Runs on the self-hosted runner installed ON the box, so no inbound SSH is
+# needed. Rebuilds ONLY this service; the other containers keep running.
+# NOTE: the 571 MB ModernBERT model lives on the HOST (bind-mounted) and is
+# never touched by this deploy — only the code/image is rebuilt.
+on:
+  push:
+    branches: [feature/aws-deploy]
+  workflow_dispatch:            # also allow a manual "Run workflow" click
+
+# One deploy of this repo at a time (the single runner serializes across repos).
+concurrency:
+  group: deploy-story
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, nextgenqa]
+    steps:
+      - name: Update the deployed clone
+        run: |
+          set -euo pipefail
+          cd ~/intelligent-user-story-generator-service
+          git fetch --prune origin
+          git checkout feature/aws-deploy
+          git reset --hard origin/feature/aws-deploy
+
+      - name: Rebuild & restart the service
+        run: |
+          set -euo pipefail
+          cd ~/deploy
+          docker compose -f docker-compose.prod.yml --env-file .env up -d --build story
+
+      - name: Prune dangling images
+        run: docker image prune -f
