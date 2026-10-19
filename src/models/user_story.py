@@ -39,6 +39,12 @@ class GeneratedStory(BaseModel):
     clarification_questions: list[str] = Field(default_factory=list)
     evidence_refs: list[str]
 
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, v: str) -> str:
+        """Map LLM-invented statuses (e.g. 'blocked') onto the allowed values."""
+        return v if v in ("ready", "needs_clarification") else "needs_clarification"
+
     @field_validator("story_id", mode="before")
     @classmethod
     def ensure_uuid(cls, v: str) -> str:
